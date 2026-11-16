@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.25)
 
 project(PlaySet LANGUAGES CXX)
 
+add_subdirectory(src/playback)
+
 add_executable(PlaySet main.cpp)
+target_link_libraries(PlaySet PRIVATE PlaySet::Playback)
 target_compile_features(PlaySet PRIVATE cxx_std_20)
 set_target_properties(PlaySet PROPERTIES CXX_EXTENSIONS OFF)
 
