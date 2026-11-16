@@ -10,7 +10,7 @@ permissions:
 jobs:
   macos:
     name: macOS (${{ matrix.build_type }})
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 15
     strategy:
       fail-fast: false
