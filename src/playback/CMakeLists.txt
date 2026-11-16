@@ -2,7 +2,14 @@ if(NOT APPLE)
   message(FATAL_ERROR "Stem decoding currently requires macOS.")
 endif()
 
-add_library(playset_playback STATIC stem_loader.cpp macos/stem_reader.cpp)
+add_library(playset_playback STATIC
+  stem_loader.cpp
+  stem_block.cpp
+  stem_block_queue.cpp
+  buffered_playback.cpp
+  macos/stem_reader.cpp
+  macos/audio_output.cpp
+)
 add_library(PlaySet::Playback ALIAS playset_playback)
 target_include_directories(playset_playback PUBLIC "${PROJECT_SOURCE_DIR}/src")
 target_compile_features(playset_playback PUBLIC cxx_std_20)

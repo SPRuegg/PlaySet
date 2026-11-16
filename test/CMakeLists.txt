@@ -32,3 +32,13 @@ endforeach()
 
 add_test(NAME stems.alac COMMAND stem_loader_test m4a "${ALAC_FIXTURE}")
 set_tests_properties(stems.alac PROPERTIES TIMEOUT 15)
+
+add_executable(playback_test playback_test.cpp)
+add_dependencies(playback_test playset_test_fixtures)
+target_link_libraries(playback_test PRIVATE PlaySet::Playback)
+set_target_properties(playback_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(playback_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS mixing decoding queue concurrent buffered error)
+  add_test(NAME playback.${case} COMMAND playback_test "${case}" "${M4A_FIXTURE}")
+  set_tests_properties(playback.${case} PROPERTIES TIMEOUT 15)
+endforeach()
