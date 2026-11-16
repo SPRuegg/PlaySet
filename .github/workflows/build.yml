@@ -12,6 +12,8 @@ jobs:
     name: macOS (${{ matrix.build_type }})
     runs-on: macos-15
     timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     strategy:
       fail-fast: false
       matrix:
@@ -21,6 +23,10 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Verify Xcode toolchain
+        run: |
+          xcodebuild -version
+          xcrun clang++ --version
       - name: Configure
         run: >-
           cmake -S . -B build
