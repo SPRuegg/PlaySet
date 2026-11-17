@@ -10,9 +10,12 @@ using namespace std::chrono_literals;
 
 static_assert(std::atomic<bool>::is_always_lock_free);
 
-BufferedPlayback::BufferedPlayback(PreparedSong song)
-    : song_(std::move(song)), queue_(song_.stems.size()),
-      producer_([this](std::stop_token stop) { produce(stop); }) {}
+BufferedPlayback::BufferedPlayback(PreparedSong song, std::uint64_t start_frame)
+    : song_(std::move(song)), queue_(song_.stems.size()) {
+  for (auto &stem : song_.stems)
+    stem.seek(start_frame);
+  producer_ = std::jthread([this](std::stop_token stop) { produce(stop); });
+}
 
 BufferedPlayback::~BufferedPlayback() {
   producer_.request_stop();

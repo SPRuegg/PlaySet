@@ -123,6 +123,15 @@ StemReader StemReader::open(const std::filesystem::path& path) {
 
 const StemInfo& StemReader::info() const noexcept { return impl_->info; }
 
+void StemReader::seek(std::uint64_t frame) {
+    frame = std::min(frame, impl_->info.frames);
+    impl_->check(ExtAudioFileSeek(impl_->file, static_cast<SInt64>(frame)),
+                 "Could not seek stem");
+    impl_->buffered_frames = 0;
+    impl_->buffered_position = 0;
+    impl_->reached_end = frame == impl_->info.frames;
+}
+
 std::size_t StemReader::read(std::span<float> output) {
     if (output.size() % stereo_channels != 0 || output.size() > decode_block_frames * stereo_channels) {
         throw std::invalid_argument("Read buffer must contain at most 4096 complete stereo frames.");
