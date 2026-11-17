@@ -16,7 +16,7 @@ struct PlaybackReport {
 
 class BufferedPlayback {
 public:
-  explicit BufferedPlayback(PreparedSong song);
+  explicit BufferedPlayback(PreparedSong song, std::uint64_t start_frame = 0);
   ~BufferedPlayback();
   // Control thread only, before the output consumer starts.
   void wait_until_ready();

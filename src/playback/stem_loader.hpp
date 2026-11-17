@@ -39,6 +39,7 @@ public:
   // Returns frames read and zeroes unused output. An empty buffer is a no-op;
   // otherwise, zero returned frames indicates end of file.
   std::size_t read(std::span<float> output);
+  void seek(std::uint64_t frame);
 
 private:
   struct Impl;
