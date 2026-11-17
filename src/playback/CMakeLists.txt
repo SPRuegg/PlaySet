@@ -6,6 +6,7 @@ add_library(playset_playback STATIC
   stem_loader.cpp
   stem_block.cpp
   stem_block_queue.cpp
+  transport.cpp
   buffered_playback.cpp
   macos/stem_reader.cpp
   macos/audio_output.cpp
