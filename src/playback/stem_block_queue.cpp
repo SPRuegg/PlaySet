@@ -28,7 +28,7 @@ void StemBlockQueue::commit_write() noexcept {
   write_index_.store(write + 1, std::memory_order_release);
 }
 
-RenderResult StemBlockQueue::render(std::span<float> output) noexcept {
+RenderResult StemBlockQueue::render(std::span<float> output, VolumeSmoother *volume) noexcept {
   assert(output.size() % output_channels == 0);
   std::fill(output.begin(), output.end(), 0.0F);
   RenderResult result;
@@ -42,7 +42,7 @@ RenderResult StemBlockQueue::render(std::span<float> output) noexcept {
     result.clipped_samples +=
         mix_stem_block(block, read_offset_,
                        output.subspan(result.frames * output_channels,
-                                      count * output_channels));
+                                      count * output_channels), volume);
     read_offset_ += count;
     result.frames += count;
     if (read_offset_ == block.frames) {

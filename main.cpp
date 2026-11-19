@@ -1,6 +1,7 @@
 #include "playback/transport.hpp"
 
 #include <exception>
+#include <charconv>
 #include <iostream>
 #include <string_view>
 #include <sstream>
@@ -28,14 +29,28 @@ int main(int argc, char* argv[]) {
         }
         if (command == "--transport") {
             playset::Transport transport(std::move(song));
-            std::cout << "Commands: play, pause, stop, seek <seconds>, status, quit\n";
+            std::cout << "Commands: play, pause, stop, seek <seconds>, tracks, volume <track-id> <0..1>, status, quit\n";
             for (std::string line; std::cout << "> " && std::getline(std::cin, line);) {
                 try {
                     std::istringstream input(line);
                     std::string action, extra;
                     input >> action;
                     if (action == "quit") break;
-                    if (action == "seek") {
+                    if (action == "volume") {
+                        std::string id_text;
+                        playset::TrackId id;
+                        double volume;
+                        if (!(input >> id_text >> volume) || input >> extra)
+                            throw std::invalid_argument("Use volume <track-id> <0..1>.");
+                        const auto [end, error] = std::from_chars(id_text.data(), id_text.data() + id_text.size(), id);
+                        if (error != std::errc{} || end != id_text.data() + id_text.size())
+                            throw std::invalid_argument("Track ID must be a nonnegative integer from tracks.");
+                        transport.set_track_volume(id, volume);
+                    } else if (action == "tracks") {
+                        if (input >> extra) throw std::invalid_argument("Unexpected argument.");
+                        for (const auto &track : transport.tracks())
+                            std::cout << track.id << ": " << track.name << " volume=" << track.volume << '\n';
+                    } else if (action == "seek") {
                         double seconds;
                         if (!(input >> seconds) || input >> extra)
                             throw std::invalid_argument("Use seek <seconds>.");

@@ -50,3 +50,22 @@ set_target_properties(transport_test PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(transport_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME playback.transport COMMAND transport_test "${M4A_FIXTURE}" "${ALAC_FIXTURE}")
 set_tests_properties(playback.transport PROPERTIES TIMEOUT 30)
+
+add_executable(volume_test volume_test.cpp)
+target_link_libraries(volume_test PRIVATE PlaySet::Playback)
+set_target_properties(volume_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(volume_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME playback.volume COMMAND volume_test)
+set_tests_properties(playback.volume PROPERTIES TIMEOUT 30)
+
+option(PLAYSET_TEST_AUDIO_OUTPUT "Test the native output device with its volume forced to zero" OFF)
+if(PLAYSET_TEST_AUDIO_OUTPUT)
+  add_executable(native_output_test native_output_test.cpp
+    "${PROJECT_SOURCE_DIR}/src/playback/macos/audio_output.cpp")
+  target_link_libraries(native_output_test PRIVATE PlaySet::Playback)
+  set_target_properties(native_output_test PROPERTIES CXX_EXTENSIONS OFF)
+  target_compile_options(native_output_test PRIVATE -Wall -Wextra -Wpedantic
+    -include "${CMAKE_CURRENT_SOURCE_DIR}/muted_audio_output.hpp")
+  add_test(NAME playback.native_output COMMAND native_output_test)
+  set_tests_properties(playback.native_output PROPERTIES TIMEOUT 45 RUN_SERIAL TRUE)
+endif()

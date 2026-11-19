@@ -1,6 +1,7 @@
 #pragma once
 
 #include "stem_loader.hpp"
+#include "track_volume.hpp"
 
 #include <cstdint>
 #include <span>
@@ -28,6 +29,6 @@ std::size_t decode_stem_block(PreparedSong &song, StemBlock &block);
 
 // The final output boundary: sum with double precision, count overloads, then clamp.
 std::uint64_t mix_stem_block(const StemBlock &block, std::size_t first_frame,
-                             std::span<float> output) noexcept;
+                             std::span<float> output, VolumeSmoother *volume = nullptr) noexcept;
 
 } // namespace playset
