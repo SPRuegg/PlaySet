@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <utility>
+#include <stdexcept>
 
 namespace playset {
 namespace {
@@ -10,8 +11,15 @@ using namespace std::chrono_literals;
 
 static_assert(std::atomic<bool>::is_always_lock_free);
 
-BufferedPlayback::BufferedPlayback(PreparedSong song, std::uint64_t start_frame)
-    : song_(std::move(song)), queue_(song_.stems.size()) {
+BufferedPlayback::BufferedPlayback(PreparedSong song, std::uint64_t start_frame,
+                                   std::shared_ptr<TrackVolumes> volumes,
+                                   VolumeSmoothing smoothing)
+    : song_(std::move(song)), queue_(song_.stems.size()), volumes_(std::move(volumes)) {
+  if (volumes_) {
+    if (volumes_->size() != song_.stems.size())
+      throw std::invalid_argument("Volume controls must match the song tracks.");
+    volume_smoother_ = std::make_unique<VolumeSmoother>(*volumes_, song_.sample_rate, smoothing);
+  }
   for (auto &stem : song_.stems)
     stem.seek(start_frame);
   producer_ = std::jthread([this](std::stop_token stop) { produce(stop); });
@@ -52,13 +60,14 @@ void BufferedPlayback::wait_until_ready() {
 std::size_t BufferedPlayback::render(std::span<float> output) noexcept {
   if (output.empty()) return 0;
   auto producer_finished = producer_done_.load(std::memory_order_acquire);
-  auto result = queue_.render(output);
+  if (volume_smoother_) volume_smoother_->begin_render();
+  auto result = queue_.render(output, volume_smoother_.get());
   if (result.frames < output.size() / output_channels && !producer_finished &&
       producer_done_.load(std::memory_order_acquire)) {
     // Completion may publish after the first read; drain any final block before
     // EOF.
     const auto remaining =
-        queue_.render(output.subspan(result.frames * output_channels));
+        queue_.render(output.subspan(result.frames * output_channels), volume_smoother_.get());
     result.frames += remaining.frames;
     result.clipped_samples += remaining.clipped_samples;
     producer_finished = true;
@@ -71,6 +80,10 @@ std::size_t BufferedPlayback::render(std::span<float> output) noexcept {
     underruns_.fetch_add(1, std::memory_order_relaxed);
   }
   return result.frames;
+}
+
+void BufferedPlayback::settle_volumes() noexcept {
+  if (volume_smoother_) volume_smoother_->settle();
 }
 
 bool BufferedPlayback::exhausted() const noexcept {
