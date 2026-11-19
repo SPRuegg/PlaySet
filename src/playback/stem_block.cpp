@@ -11,7 +11,7 @@ constexpr auto samples_per_track = playback_block_frames * output_channels;
 }
 
 StemBlock::StemBlock(std::size_t track_count) {
-  if (track_count == 0 || track_count > 256) {
+  if (track_count == 0 || track_count > maximum_tracks) {
     throw std::invalid_argument(
         "A playback block requires between 1 and 256 tracks.");
   }
@@ -48,18 +48,20 @@ std::size_t decode_stem_block(PreparedSong &song, StemBlock &block) {
 }
 
 std::uint64_t mix_stem_block(const StemBlock &block, std::size_t first_frame,
-                             std::span<float> output) noexcept {
+                             std::span<float> output, VolumeSmoother *volume) noexcept {
   assert(output.size() % output_channels == 0);
   assert(first_frame <= block.frames);
   assert(output.size() / output_channels <= block.frames - first_frame);
   std::uint64_t clipped = 0;
   for (std::size_t frame = 0; frame < output.size() / output_channels;
        ++frame) {
+    const auto gains = volume ? volume->next_frame() : std::span<const double>{};
+    assert(!volume || gains.size() == block.track_count());
     for (std::size_t channel = 0; channel < output_channels; ++channel) {
       const auto source_sample = (first_frame + frame) * output_channels + channel;
       double sum = 0;
       for (std::size_t track = 0; track < block.track_count(); ++track) {
-        sum += block.track(track)[source_sample];
+        sum += block.track(track)[source_sample] * (volume ? gains[track] : 1.0);
       }
       if (sum < -1.0 || sum > 1.0)
         ++clipped;

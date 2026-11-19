@@ -12,22 +12,24 @@ struct Transport::Session {
   BufferedPlayback playback;
   std::unique_ptr<PlaybackOutput> output;
 
-  Session(PreparedSong song, std::uint64_t frame, double rate, const OutputFactory &factory)
-      : origin(frame), playback(std::move(song), frame) {
+  Session(PreparedSong song, std::uint64_t frame, double rate, const OutputFactory &factory,
+          std::shared_ptr<TrackVolumes> volumes, VolumeSmoothing smoothing)
+      : origin(frame), playback(std::move(song), frame, std::move(volumes), smoothing) {
     playback.wait_until_ready();
     output = factory(playback, rate);
   }
 };
 
-Transport::Transport(PreparedSong song, OutputFactory output)
-    : sample_rate_(song.sample_rate), output_factory_(std::move(output)) {
+Transport::Transport(PreparedSong song, OutputFactory output, VolumeSmoothing smoothing)
+    : sample_rate_(song.sample_rate), output_factory_(std::move(output)), smoothing_(smoothing) {
   for (const auto &stem : song.stems) {
     stems_.push_back(stem.info());
     total_frames_ = std::max(total_frames_, stem.info().frames);
   }
   if (stems_.empty() || !std::isfinite(sample_rate_) || sample_rate_ <= 0)
     throw std::invalid_argument("Transport requires a prepared song.");
-  session_ = std::make_unique<Session>(std::move(song), 0, sample_rate_, output_factory_);
+  volumes_ = std::make_shared<TrackVolumes>(stems_.size());
+  session_ = std::make_unique<Session>(std::move(song), 0, sample_rate_, output_factory_, volumes_, smoothing_);
 }
 Transport::~Transport() = default;
 
@@ -40,7 +42,7 @@ void Transport::replace(std::uint64_t frame, TransportStatus status) {
       throw std::runtime_error("Stem format or length changed after loading.");
     song.stems.push_back(std::move(stem));
   }
-  auto replacement = std::make_unique<Session>(std::move(song), frame, sample_rate_, output_factory_);
+  auto replacement = std::make_unique<Session>(std::move(song), frame, sample_rate_, output_factory_, volumes_, smoothing_);
   session_->output->pause();
   session_.swap(replacement);
   status_ = frame == total_frames_ && status == TransportStatus::playing
@@ -87,6 +89,18 @@ void Transport::seek(double seconds) {
   auto status = snapshot().status;
   if (status == TransportStatus::ended) status = TransportStatus::paused;
   replace(frame, status);
+}
+
+void Transport::set_track_volume(TrackId id, double volume) {
+  volumes_->set(id, volume);
+}
+
+std::vector<TrackSnapshot> Transport::tracks() const {
+  std::vector<TrackSnapshot> result;
+  result.reserve(stems_.size());
+  for (TrackId id = 0; id < stems_.size(); ++id)
+    result.push_back({id, stems_[id].path.stem().string(), volumes_->get(id)});
+  return result;
 }
 
 } // namespace playset
