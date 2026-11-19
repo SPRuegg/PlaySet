@@ -19,7 +19,7 @@ public:
   explicit StemBlockQueue(std::size_t track_count);
   StemBlock *begin_write() noexcept;
   void commit_write() noexcept;
-  RenderResult render(std::span<float> output) noexcept;
+  RenderResult render(std::span<float> output, VolumeSmoother *volume = nullptr) noexcept;
   [[nodiscard]] std::size_t ready_blocks() const noexcept;
 
 private:

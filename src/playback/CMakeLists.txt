@@ -4,6 +4,7 @@ endif()
 
 add_library(playset_playback STATIC
   stem_loader.cpp
+  track_volume.cpp
   stem_block.cpp
   stem_block_queue.cpp
   transport.cpp
