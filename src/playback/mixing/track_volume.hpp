@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <span>
 
 namespace playset {
@@ -15,13 +16,17 @@ inline constexpr std::size_t maximum_tracks = 256;
 class TrackVolumes {
 public:
   explicit TrackVolumes(std::size_t count);
+  // Publish from one control thread; set_all publishes a whole batch together.
   void set(TrackId id, double volume);
+  void set_all(std::span<const double> volumes);
   [[nodiscard]] double get(TrackId id) const;
   [[nodiscard]] std::size_t size() const noexcept { return count_; }
 
 private:
   friend class VolumeSmoother;
   std::size_t count_;
+  // One control-thread publisher; odd revisions mark an unfinished update.
+  std::atomic<std::uint64_t> revision_{0};
   std::array<std::atomic<double>, maximum_tracks> targets_{};
 };
 
@@ -40,6 +45,8 @@ private:
   double smoothing_;
   std::size_t ramp_frames_;
   bool initialized_ = false;
+  std::uint64_t revision_ = 0;
+  std::array<double, maximum_tracks> pending_{};
   std::array<double, maximum_tracks> current_{};
   std::array<double, maximum_tracks> target_{};
   std::array<double, maximum_tracks> step_{};
