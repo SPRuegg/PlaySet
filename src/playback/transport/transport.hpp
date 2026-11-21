@@ -1,6 +1,6 @@
 #pragma once
 
-#include "audio_output.hpp"
+#include "playback/output/audio_output.hpp"
 
 #include <functional>
 #include <string>

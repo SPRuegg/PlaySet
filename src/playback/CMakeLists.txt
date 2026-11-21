@@ -3,14 +3,14 @@ if(NOT APPLE)
 endif()
 
 add_library(playset_playback STATIC
-  stem_loader.cpp
-  track_volume.cpp
-  stem_block.cpp
-  stem_block_queue.cpp
-  transport.cpp
-  buffered_playback.cpp
-  macos/stem_reader.cpp
-  macos/audio_output.cpp
+  loading/stem_loader.cpp
+  mixing/track_volume.cpp
+  buffering/stem_block.cpp
+  buffering/stem_block_queue.cpp
+  transport/transport.cpp
+  buffering/buffered_playback.cpp
+  loading/macos/stem_reader.cpp
+  output/macos/audio_output.cpp
 )
 add_library(PlaySet::Playback ALIAS playset_playback)
 target_include_directories(playset_playback PUBLIC "${PROJECT_SOURCE_DIR}/src")

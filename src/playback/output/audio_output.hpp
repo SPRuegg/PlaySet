@@ -1,6 +1,6 @@
 #pragma once
 
-#include "buffered_playback.hpp"
+#include "playback/buffering/buffered_playback.hpp"
 
 #include <memory>
 

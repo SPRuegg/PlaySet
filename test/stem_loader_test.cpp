@@ -1,5 +1,5 @@
 #include "fixture_support.hpp"
-#include "playback/stem_loader.hpp"
+#include "playback/loading/stem_loader.hpp"
 
 #include <algorithm>
 #include <array>

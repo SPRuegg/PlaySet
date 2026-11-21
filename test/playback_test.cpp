@@ -1,5 +1,5 @@
 #include "fixture_support.hpp"
-#include "playback/buffered_playback.hpp"
+#include "playback/buffering/buffered_playback.hpp"
 
 #include <algorithm>
 #include <array>
