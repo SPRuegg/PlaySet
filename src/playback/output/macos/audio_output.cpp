@@ -28,12 +28,13 @@ struct OutputState {
   std::atomic<OSStatus> error{noErr};
   std::atomic<std::uint64_t> command{0};
   std::atomic<std::uint64_t> observed_command{0};
-  std::atomic<std::uint64_t> frames{0};
+  std::atomic<std::int64_t> frames{0};
   std::atomic<std::uint64_t> audio_end_tick{0};
   bool was_playing = false;
 };
 static_assert(std::atomic<OSStatus>::is_always_lock_free);
 static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
+static_assert(std::atomic<std::int64_t>::is_always_lock_free);
 
 OSStatus render(void *user, AudioUnitRenderActionFlags *flags,
                 const AudioTimeStamp *time, UInt32, UInt32 frame_count,
@@ -57,7 +58,7 @@ OSStatus render(void *user, AudioUnitRenderActionFlags *flags,
   if (frames == 0) *flags |= kAudioUnitRenderAction_OutputIsSilence;
   else *flags &= ~kAudioUnitRenderAction_OutputIsSilence;
   if (frames > 0) {
-    state.frames.fetch_add(frames, std::memory_order_relaxed);
+    state.frames.fetch_add(static_cast<std::int64_t>(frames), std::memory_order_relaxed);
     const auto start = time && (time->mFlags & kAudioTimeStampHostTimeValid)
                            ? time->mHostTime : mach_absolute_time();
     state.audio_end_tick.store(start + static_cast<std::uint64_t>(
@@ -145,7 +146,7 @@ public:
       std::this_thread::sleep_for(1ms);
     }
   }
-  std::uint64_t position_frames() const override {
+  std::int64_t position_frames() const override {
     return state_.frames.load(std::memory_order_relaxed);
   }
   bool finished() override {

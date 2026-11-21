@@ -4,12 +4,12 @@ endif()
 
 add_library(playset_playback STATIC
   loading/stem_loader.cpp
+  loading/macos/stem_reader.cpp
   mixing/track_volume.cpp
   buffering/stem_block.cpp
   buffering/stem_block_queue.cpp
   transport/transport.cpp
   buffering/buffered_playback.cpp
-  loading/macos/stem_reader.cpp
   output/macos/audio_output.cpp
 )
 add_library(PlaySet::Playback ALIAS playset_playback)

@@ -11,7 +11,7 @@ using namespace std::chrono_literals;
 
 static_assert(std::atomic<bool>::is_always_lock_free);
 
-BufferedPlayback::BufferedPlayback(PreparedSong song, std::uint64_t start_frame,
+BufferedPlayback::BufferedPlayback(PreparedSong song, std::int64_t start_frame,
                                    std::shared_ptr<TrackVolumes> volumes,
                                    VolumeSmoothing smoothing)
     : song_(std::move(song)), queue_(song_.stems.size()), volumes_(std::move(volumes)) {

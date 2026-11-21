@@ -17,7 +17,7 @@ struct PlaybackReport {
 
 class BufferedPlayback {
 public:
-  explicit BufferedPlayback(PreparedSong song, std::uint64_t start_frame = 0,
+  explicit BufferedPlayback(PreparedSong song, std::int64_t start_frame = 0,
                             std::shared_ptr<TrackVolumes> volumes = nullptr,
                             VolumeSmoothing smoothing = VolumeSmoothing::exponential);
   ~BufferedPlayback();

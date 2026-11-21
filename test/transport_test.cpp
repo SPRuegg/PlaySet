@@ -17,11 +17,11 @@ void require(bool condition, const char *message) {
 struct OfflineOutput final : PlaybackOutput {
   BufferedPlayback &playback;
   bool running = false;
-  std::uint64_t frame = 0;
+  std::int64_t frame = 0;
   explicit OfflineOutput(BufferedPlayback &source) : playback(source) {}
   void play() override { running = true; }
   void pause() override { running = false; }
-  std::uint64_t position_frames() const override { return frame; }
+  std::int64_t position_frames() const override { return frame; }
   bool finished() override { return playback.exhausted(); }
   std::vector<float> advance(std::size_t frames) {
     std::vector<float> output(frames * output_channels, 0);
@@ -36,8 +36,14 @@ void reader_seek(const fs::path &file) {
   for (auto frames = reader.read(block); frames; frames = reader.read(block))
     reference.insert(reference.end(), block.begin(), block.begin() + frames * output_channels);
   const auto length = reference.size() / output_channels;
+  reader.seek(0);
+  bool rejected = false;
+  try { reader.seek(-1); } catch (const std::invalid_argument &) { rejected = true; }
+  require(rejected, "Negative reader seek was accepted");
+  require(reader.read(block) > 0 && block[0] == reference[0],
+          "Rejected negative seek changed the reader position");
   for (const auto frame : {std::size_t{0}, length / 3, length - 1, length, length / 2, std::size_t{0}}) {
-    reader.seek(frame);
+    reader.seek(static_cast<std::int64_t>(frame));
     const auto count = reader.read(block);
     require(count == std::min(decode_block_frames, length - frame), "Seek frame count differs");
     for (std::size_t i = 0; i < count * output_channels; ++i)

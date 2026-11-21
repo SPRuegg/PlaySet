@@ -8,11 +8,11 @@
 namespace playset {
 
 struct Transport::Session {
-  std::uint64_t origin;
+  std::int64_t origin;
   BufferedPlayback playback;
   std::unique_ptr<PlaybackOutput> output;
 
-  Session(PreparedSong song, std::uint64_t frame, double rate, const OutputFactory &factory,
+  Session(PreparedSong song, std::int64_t frame, double rate, const OutputFactory &factory,
           std::shared_ptr<TrackVolumes> volumes, VolumeSmoothing smoothing)
       : origin(frame), playback(std::move(song), frame, std::move(volumes), smoothing) {
     playback.wait_until_ready();
@@ -33,7 +33,7 @@ Transport::Transport(PreparedSong song, OutputFactory output, VolumeSmoothing sm
 }
 Transport::~Transport() = default;
 
-void Transport::replace(std::uint64_t frame, TransportStatus status) {
+void Transport::replace(std::int64_t frame, TransportStatus status) {
   PreparedSong song{sample_rate_, static_cast<double>(total_frames_) / sample_rate_, {}};
   for (const auto &info : stems_) {
     auto stem = StemReader::open(info.path);
@@ -85,7 +85,10 @@ void Transport::seek(double seconds) {
   const auto duration = static_cast<double>(total_frames_) / sample_rate_;
   if (!std::isfinite(seconds) || seconds < 0 || seconds > duration)
     throw std::invalid_argument("Seek position must be within the song duration.");
-  const auto frame = std::min(total_frames_, static_cast<std::uint64_t>(std::llround(seconds * sample_rate_)));
+  const auto requested_frame = seconds * sample_rate_;
+  const auto frame = requested_frame >= static_cast<double>(total_frames_)
+                         ? total_frames_
+                         : static_cast<std::int64_t>(std::llround(requested_frame));
   auto status = snapshot().status;
   if (status == TransportStatus::ended) status = TransportStatus::paused;
   replace(frame, status);

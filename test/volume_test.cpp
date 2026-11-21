@@ -65,11 +65,11 @@ void ramps_and_mixing() {
 struct OfflineOutput final : PlaybackOutput {
   BufferedPlayback &playback;
   bool running = false;
-  std::uint64_t frame = 0;
+  std::int64_t frame = 0;
   explicit OfflineOutput(BufferedPlayback &source) : playback(source) {}
   void play() override { playback.settle_volumes(); running = true; }
   void pause() override { running = false; }
-  std::uint64_t position_frames() const override { return frame; }
+  std::int64_t position_frames() const override { return frame; }
   bool finished() override { return playback.exhausted(); }
   std::vector<float> advance(std::size_t count) {
     std::vector<float> output(count * output_channels);

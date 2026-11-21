@@ -41,10 +41,10 @@ public:
 
 private:
   struct Session;
-  void replace(std::uint64_t frame, TransportStatus status);
+  void replace(std::int64_t frame, TransportStatus status);
   std::vector<StemInfo> stems_;
   double sample_rate_;
-  std::uint64_t total_frames_ = 0;
+  std::int64_t total_frames_ = 0;
   OutputFactory output_factory_;
   VolumeSmoothing smoothing_;
   std::shared_ptr<TrackVolumes> volumes_;

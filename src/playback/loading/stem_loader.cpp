@@ -10,10 +10,6 @@ namespace {
 constexpr std::size_t maximum_stems = 256;
 }
 
-double StemInfo::duration_seconds() const noexcept {
-  return static_cast<double>(frames) / sample_rate;
-}
-
 PreparedSong prepare_stems(const std::filesystem::path &folder) {
   if (!std::filesystem::is_directory(folder)) {
     throw std::runtime_error(

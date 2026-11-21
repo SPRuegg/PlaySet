@@ -12,7 +12,7 @@ public:
   virtual ~PlaybackOutput() = default;
   virtual void play() = 0;
   virtual void pause() = 0;
-  [[nodiscard]] virtual std::uint64_t position_frames() const = 0;
+  [[nodiscard]] virtual std::int64_t position_frames() const = 0;
   [[nodiscard]] virtual bool finished() = 0;
 };
 
