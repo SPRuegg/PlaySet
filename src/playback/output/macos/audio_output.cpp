@@ -40,7 +40,8 @@ OSStatus render(void *user, AudioUnitRenderActionFlags *flags,
                 const AudioTimeStamp *time, UInt32, UInt32 frame_count,
                 AudioBufferList *buffers) noexcept {
   auto &state = *static_cast<OutputState *>(user);
-  if (!buffers || buffers->mNumberBuffers != 1 ||
+  if (frame_count > StemBlockQueue::maximum_render_frames ||
+      !buffers || buffers->mNumberBuffers != 1 ||
       !buffers->mBuffers[0].mData ||
       buffers->mBuffers[0].mNumberChannels != output_channels ||
       buffers->mBuffers[0].mDataByteSize / sizeof(float) / output_channels < frame_count) {

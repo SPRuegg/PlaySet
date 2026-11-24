@@ -38,6 +38,7 @@ private:
   std::shared_ptr<TrackVolumes> volumes_;
   std::unique_ptr<VolumeSmoother> volume_smoother_;
   std::exception_ptr error_;
+  bool stalled_ = false;
   std::atomic<bool> producer_done_{false};
   std::atomic<bool> exhausted_{false};
   std::atomic<std::uint64_t> rendered_frames_{0};

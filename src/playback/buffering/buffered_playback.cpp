@@ -5,10 +5,6 @@
 #include <stdexcept>
 
 namespace playset {
-namespace {
-using namespace std::chrono_literals;
-}
-
 static_assert(std::atomic<bool>::is_always_lock_free);
 
 BufferedPlayback::BufferedPlayback(PreparedSong song, std::int64_t start_frame,
@@ -36,7 +32,7 @@ void BufferedPlayback::produce(std::stop_token stop) noexcept {
     while (!stop.stop_requested()) {
       auto *block = queue_.begin_write();
       if (!block) {
-        std::this_thread::sleep_for(1ms);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
         continue;
       }
       if (decode_stem_block(song_, *block) == 0)
@@ -52,33 +48,24 @@ void BufferedPlayback::produce(std::stop_token stop) noexcept {
 void BufferedPlayback::wait_until_ready() {
   while (!producer_done_.load(std::memory_order_acquire) &&
          queue_.ready_blocks() < playback_prefill_blocks) {
-    std::this_thread::sleep_for(1ms);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
   rethrow_if_failed();
 }
 
 std::size_t BufferedPlayback::render(std::span<float> output) noexcept {
   if (output.empty()) return 0;
-  auto producer_finished = producer_done_.load(std::memory_order_acquire);
+  const auto producer_finished = producer_done_.load(std::memory_order_acquire);
   if (volume_smoother_) volume_smoother_->begin_render();
-  auto result = queue_.render(output, volume_smoother_.get());
-  if (result.frames < output.size() / output_channels && !producer_finished &&
-      producer_done_.load(std::memory_order_acquire)) {
-    // Completion may publish after the first read; drain any final block before
-    // EOF.
-    const auto remaining =
-        queue_.render(output.subspan(result.frames * output_channels), volume_smoother_.get());
-    result.frames += remaining.frames;
-    result.clipped_samples += remaining.clipped_samples;
-    producer_finished = true;
-  }
+  const auto result = queue_.render(output, volume_smoother_.get(), producer_finished);
   rendered_frames_.fetch_add(result.frames, std::memory_order_relaxed);
   clipped_samples_.fetch_add(result.clipped_samples, std::memory_order_relaxed);
   if (result.frames == 0 && producer_finished)
     exhausted_.store(true, std::memory_order_release);
   if (result.frames < output.size() / output_channels && !producer_finished) {
-    underruns_.fetch_add(1, std::memory_order_relaxed);
-  }
+    if (!stalled_) underruns_.fetch_add(1, std::memory_order_relaxed);
+    stalled_ = true;
+  } else stalled_ = false;
   return result.frames;
 }
 

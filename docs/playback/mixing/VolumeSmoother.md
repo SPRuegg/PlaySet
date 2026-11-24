@@ -47,6 +47,8 @@ On the first successful read, the smoother adopts those levels immediately. Unti
 
 On later calls, a changed target starts a gradual transition from the current level. Changes made after `begin_render()` are picked up on the next call, rather than halfway through the current batch.
 
+If playback has too little buffered audio for a full callback, it outputs silence without calling `next_frame()`. The smoother can pick up new targets, but its frame-by-frame progress continues only when source audio resumes. See [Underruns](../buffering/Underruns.md).
+
 ### Advancing one frame
 
 ```cpp

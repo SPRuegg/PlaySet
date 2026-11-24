@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <bit>
 #include <chrono>
 #include <iostream>
@@ -108,6 +107,72 @@ void queue() {
     }
     require(queue.ready_blocks() == 0, "All slots released");
   }
+
+  StemBlockQueue delayed(2);
+  const auto publish = [&](std::size_t first, std::size_t frames) {
+    auto *block = delayed.begin_write();
+    require(block != nullptr, "Delayed producer has space");
+    block->frames = frames;
+    for (std::size_t i = 0; i < frames; ++i) {
+      const auto value = static_cast<float>(first + i) / 2048;
+      block->track(0)[i * 2] = value;
+      block->track(0)[i * 2 + 1] = -value;
+      block->track(1)[i * 2] = 0.125F;
+      block->track(1)[i * 2 + 1] = -0.125F;
+    }
+    delayed.commit_write();
+  };
+  const auto verify = [&](std::span<const float> samples, std::size_t first,
+                           std::size_t frames) {
+    for (std::size_t i = 0; i < frames; ++i) {
+      const auto expected = static_cast<float>(first + i) / 2048 + 0.125F;
+      require(samples[i * 2] == expected && samples[i * 2 + 1] == -expected,
+              "Recovery skipped frames or lost stem synchronization");
+    }
+  };
+  publish(0, 300);
+  std::array<float, 1024> callback{};
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    callback.fill(1);
+    require(delayed.render(callback).frames == 0 && delayed.ready_blocks() == 1,
+            "Shortage consumed buffered audio");
+    require(std::all_of(callback.begin(), callback.end(), [](float v) { return v == 0; }),
+            "Shortage did not silence the entire callback");
+  }
+  publish(300, 400);
+  require(delayed.render(callback).frames == 512, "Full callback did not resume");
+  verify(callback, 0, 512);
+  require(delayed.render(callback).frames == 0 && delayed.ready_blocks() == 1,
+          "Shortage discarded a partly consumed block");
+  publish(700, 324);
+  require(delayed.render(callback).frames == 512, "Partial-block recovery failed");
+  verify(callback, 512, 512);
+  publish(1024, 17);
+  require(delayed.render(callback, nullptr, true).frames == 17,
+          "Completion must drain the final partial callback");
+  verify(callback, 1024, 17);
+  require(std::all_of(callback.begin() + 34, callback.end(), [](float v) { return v == 0; }),
+          "Final callback was not padded with silence");
+  require(delayed.render(callback, nullptr, true).frames == 0,
+          "Completed queue did not stay exhausted");
+
+  StemBlockQueue large(1);
+  const auto fill = [&] {
+    auto *block = large.begin_write();
+    require(block != nullptr, "Largest callback needs another block slot");
+    block->frames = playback_block_frames;
+    std::fill(block->track(0).begin(), block->track(0).end(), 0.25F);
+    large.commit_write();
+  };
+  fill();
+  std::array<float, 2> one_frame{};
+  require(large.render(one_frame).frames == 1, "Create partly consumed head block");
+  for (std::size_t i = 1; i < StemBlockQueue::capacity - 1; ++i) fill();
+  std::vector<float> largest(StemBlockQueue::maximum_render_frames * output_channels);
+  require(large.render(largest).frames == 0, "Maximum callback consumed too few frames");
+  fill();
+  require(large.render(largest).frames == StemBlockQueue::maximum_render_frames,
+          "Partly consumed head prevented maximum callback recovery");
 }
 
 void concurrent_queue() {
@@ -139,7 +204,9 @@ void concurrent_queue() {
   while (position < blocks * playback_block_frames) {
     require(std::chrono::steady_clock::now() < deadline,
             "Concurrent queue made progress");
-    const auto result = queue.render(output);
+    const auto requested = std::min(output.size() / output_channels,
+                                    blocks * playback_block_frames - position);
+    const auto result = queue.render(std::span(output).first(requested * output_channels));
     for (std::size_t frame = 0; frame < result.frames; ++frame) {
       const auto expected =
           static_cast<float>((position + frame) % 1024) / 2048;
@@ -163,8 +230,10 @@ void buffered(const std::filesystem::path &fixture) {
     playback.wait_until_ready();
     require(playback.render({}) == 0 && !playback.exhausted(),
             "An empty render does not discard queued audio or signal EOF");
-    std::array<float, 200> output{};
+    std::array<float, 400> output{};
     require(playback.render(output) == 100, "Retain a song shorter than one output buffer");
+    require(std::all_of(output.begin() + 200, output.end(), [](float v) { return v == 0; }),
+            "Short song must pad its final callback with silence");
     require(playback.render(output) == 0 && playback.exhausted(), "Exhaust only after consuming the final frame");
   }
   TempFolder temp;
