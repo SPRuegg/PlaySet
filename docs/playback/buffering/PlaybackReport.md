@@ -34,6 +34,8 @@ Because each counter is stored in an atomic value, you can read the report while
 
 These totals belong to the current `BufferedPlayback` instance. Creating a replacement instance starts new counters.
 
+Pausing, stopping, and seeking within the same instance do not reset these totals. For example, seeking backward and playing a section again adds its frames to `rendered_frames` again, so that count is not the current song position.
+
 ## Example
 
 ```cpp

@@ -69,6 +69,13 @@ struct OfflineOutput final : PlaybackOutput {
   explicit OfflineOutput(BufferedPlayback &source) : playback(source) {}
   void play() override { playback.settle_volumes(); running = true; }
   void pause() override { running = false; }
+  void seek(std::int64_t target) override {
+    playback.prepare_seek(target);
+    const auto origin = playback.apply_pending_seek();
+    require(origin.has_value(), "Prepared seek was not available at boundary");
+    frame = *origin;
+    playback.acknowledge_seek();
+  }
   std::int64_t position_frames() const override { return frame; }
   bool finished() override { return playback.exhausted(); }
   std::vector<float> advance(std::size_t count) {

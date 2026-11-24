@@ -21,6 +21,8 @@ public:
   explicit StemBlockQueue(std::size_t track_count);
   StemBlock *begin_write() noexcept;
   void commit_write() noexcept;
+  // Inactive bank only, after its previous consumer has acknowledged the switch.
+  void reset() noexcept;
   // At most maximum_render_frames; keep audio untouched on shortage unless finished.
   RenderResult render(std::span<float> output, VolumeSmoother *volume = nullptr,
                       bool producer_finished = false) noexcept;

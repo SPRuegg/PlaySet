@@ -258,6 +258,25 @@ void buffered(const std::filesystem::path &fixture) {
   auto prepared_song = prepare_stems(temp.path);
   BufferedPlayback abandoned(std::move(prepared_song));
   abandoned.wait_until_ready();
+
+  TempFolder seek_folder;
+  write_pcm_wav(seek_folder.path / "long.wav", 44100, 1, 16, 20000);
+  write_pcm_wav(seek_folder.path / "short.wav", 44100, 1, 16, 2000);
+  BufferedPlayback seeking(prepare_stems(seek_folder.path));
+  seeking.wait_until_ready();
+  seeking.prepare_seek(5000);
+  std::array<float, 1024> callback{};
+  require(seeking.render(callback) == 512 && callback.front() == 0.5F,
+          "Preparing inactive bank changed audio before the callback switch");
+  bool pending_rejected = false;
+  try { seeking.prepare_seek(0); } catch (const std::logic_error &) { pending_rejected = true; }
+  require(pending_rejected, "A second seek overwrote an unacknowledged bank");
+  require(seeking.apply_pending_seek() == 5000, "Wrong bank origin published");
+  seeking.acknowledge_seek();
+  require(!seeking.seek_pending() && seeking.render(callback) == 512 && callback.front() == 0.25F,
+          "Boundary switch did not discard old queued audio");
+  require(seeking.report().rendered_frames == 1024,
+          "Bank switch reset cumulative playback counters");
 }
 
 void decoder_error() {
@@ -302,6 +321,16 @@ void decoder_error() {
         std::string(error.what()).find("non-finite") != std::string::npos;
   }
   require(rejected, "Background decoder errors reach the control thread");
+
+  rejected = false;
+  try {
+    BufferedPlayback playback(prepare_stems(temp.path));
+    playback.wait_until_ready();
+    playback.prepare_seek(5000);
+  } catch (const std::runtime_error &error) {
+    rejected = std::string(error.what()).find("non-finite") != std::string::npos;
+  }
+  require(rejected, "Seek preparation hid a decoder failure or waited forever");
 }
 } // namespace
 

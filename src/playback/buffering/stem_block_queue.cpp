@@ -28,6 +28,12 @@ void StemBlockQueue::commit_write() noexcept {
   write_index_.store(write + 1, std::memory_order_release);
 }
 
+void StemBlockQueue::reset() noexcept {
+  read_index_.store(0, std::memory_order_relaxed);
+  write_index_.store(0, std::memory_order_relaxed);
+  read_offset_ = 0;
+}
+
 RenderResult StemBlockQueue::render(std::span<float> output, VolumeSmoother *volume,
                                     bool producer_finished) noexcept {
   assert(output.size() % output_channels == 0);
@@ -62,7 +68,7 @@ RenderResult StemBlockQueue::render(std::span<float> output, VolumeSmoother *vol
 }
 
 std::size_t StemBlockQueue::ready_blocks() const noexcept {
-  // Only called by the consumer (or the control thread before output starts).
+  // Consumer, control thread before output starts, or producer of an inactive bank.
   const auto read = read_index_.load(std::memory_order_relaxed);
   return static_cast<std::size_t>(write_index_.load(std::memory_order_acquire) -
                                   read);

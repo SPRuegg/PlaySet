@@ -15,6 +15,7 @@ public:
   explicit StemBlockQueue(std::size_t track_count);
   StemBlock *begin_write() noexcept;
   void commit_write() noexcept;
+  void reset() noexcept;
   RenderResult render(std::span<float> output, VolumeSmoother *volume = nullptr,
                       bool producer_finished = false) noexcept;
   [[nodiscard]] std::size_t ready_blocks() const noexcept;
@@ -32,6 +33,7 @@ Implemented in `src/playback/buffering/stem_block_queue.cpp`.
 | `begin_write()` | Returns the next free block, or `nullptr` if the queue is full. |
 | `commit_write()` | Publishes the filled block so playback can read it. |
 | `render(output, volume, producer_finished)` | Mixes prepared audio into the output buffer and returns a `RenderResult`. |
+| `reset()` | Clears an inactive queue so it can be filled for another position. |
 | `ready_blocks()` | Returns the number of published blocks not yet fully consumed. |
 
 ### Filling a block
@@ -64,7 +66,9 @@ Because all blocks are allocated when the queue is created, playback does not ne
 
 ## Thread ownership
 
-Keep `begin_write()` and `commit_write()` on one producer thread, and `render()` on one audio thread. Call `ready_blocks()` from the audio thread, or from the control thread before output starts.
+Keep `begin_write()` and `commit_write()` on one producer thread, and `render()` on one audio thread. Call `ready_blocks()` from the audio thread, from the control thread before output starts, or from the producer while preparing an inactive bank.
+
+`reset()` clears the queue's read and write positions without reallocating its blocks. Only use it on an inactive bank after its previous consumer has acknowledged switching away. Resetting a queue while it is being rendered would discard audio and access shared state unsafely.
 
 Because the read and write positions are stored in atomic values, the producer can make blocks available while playback reads them, without making playback wait on a lock. Rendering does not allocate memory, decode files, or wait for more audio.
 

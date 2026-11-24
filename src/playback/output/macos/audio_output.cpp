@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -50,6 +51,11 @@ OSStatus render(void *user, AudioUnitRenderActionFlags *flags,
   }
   auto output = std::span(static_cast<float *>(buffers->mBuffers[0].mData),
                           static_cast<std::size_t>(frame_count) * output_channels);
+  if (const auto origin = state.playback.apply_pending_seek()) {
+    state.frames.store(*origin, std::memory_order_relaxed);
+    state.audio_end_tick.store(0, std::memory_order_release);
+    state.playback.acknowledge_seek();
+  }
   const auto command = state.command.load(std::memory_order_acquire);
   const bool playing = (command & 1) != 0;
   if (!playing || !state.was_playing) state.playback.settle_volumes();
@@ -125,13 +131,30 @@ public:
     const auto command = state_.command.load(std::memory_order_relaxed);
     if ((command & 1) != 0) return;
     state_.command.store((command + 2) | 1, std::memory_order_release);
-    if (!started_) {
-      const auto status = AudioOutputUnitStart(owner_.unit);
-      if (status != noErr) {
-        state_.command.store(command, std::memory_order_release);
-        check(status, "Could not start audio output");
+    try { start_clock(); }
+    catch (...) {
+      state_.command.store(command, std::memory_order_release);
+      throw;
+    }
+  }
+  void seek(std::int64_t frame) override {
+    check_error();
+    try {
+      state_.playback.prepare_seek(frame);
+      start_clock();
+      const auto deadline = std::chrono::steady_clock::now() + output_timeout;
+      while (state_.playback.seek_pending()) {
+        check_error();
+        if (std::chrono::steady_clock::now() > deadline)
+          throw std::runtime_error("Audio output did not acknowledge seek.");
+        std::this_thread::sleep_for(1ms);
       }
-      started_ = true;
+      check_error();
+    } catch (...) {
+      const auto command = state_.command.load(std::memory_order_relaxed);
+      state_.command.store((command + 2) & ~std::uint64_t{1}, std::memory_order_release);
+      failure_ = std::current_exception();
+      throw;
     }
   }
   void pause() override {
@@ -157,6 +180,15 @@ public:
   }
 
 private:
+  void start_clock() {
+    if (!started_) {
+      const auto status = AudioOutputUnitStart(owner_.unit);
+      if (status != noErr) {
+        check(status, "Could not start audio output");
+      }
+      started_ = true;
+    }
+  }
   static double ticks_per_second() {
     mach_timebase_info_data_t timebase{};
     if (mach_timebase_info(&timebase) != KERN_SUCCESS || timebase.numer == 0)
@@ -164,12 +196,14 @@ private:
     return 1e9 * timebase.denom / timebase.numer;
   }
   void check_error() const {
+    if (failure_) std::rethrow_exception(failure_);
     check(state_.error.load(std::memory_order_relaxed), "Audio output failed");
     state_.playback.rethrow_if_failed();
   }
   OutputState state_;
   UnitOwner owner_;
   bool started_ = false;
+  std::exception_ptr failure_;
 };
 } // namespace
 

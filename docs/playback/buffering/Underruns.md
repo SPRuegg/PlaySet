@@ -17,11 +17,11 @@ For example, if the device requests 512 frames but only 300 are ready:
 
 Once enough frames are ready, playback resumes from the same source position. It does not skip audio to catch up with the time spent silent. All stems remain on the same timeline.
 
-It avoids playing small fragments merely because some audio is available, although it cannot prevent audible gaps when the reader falls behind.
+This keeps playback from sending small fragments simply because some audio is ready. You may still hear a gap if the reader falls behind.
 
 ## End of the song
 
-Once the background reader has finished, a full callback is no longer required. Playback uses whatever audio remains and fills the unused part of the output with silence.
+Once the background reader has reached the end of the stems, a full callback is no longer required. Playback uses whatever audio remains and fills the unused part of the output with silence.
 
 For example, if only 100 frames remain and the device requests 512, playback outputs those 100 frames followed by 412 frames of silence. The position advances by 100 frames.
 
