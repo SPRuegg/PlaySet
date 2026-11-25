@@ -69,3 +69,11 @@ if(PLAYSET_TEST_AUDIO_OUTPUT)
   add_test(NAME playback.native_output COMMAND native_output_test)
   set_tests_properties(playback.native_output PROPERTIES TIMEOUT 45 RUN_SERIAL TRUE)
 endif()
+
+add_executable(transport_console_driver "${PROJECT_SOURCE_DIR}/main.cpp" console_audio_output.cpp)
+target_link_libraries(transport_console_driver PRIVATE PlaySet::Playback)
+set_target_properties(transport_console_driver PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(transport_console_driver PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME playback.console COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/transport_console_test.py" "$<TARGET_FILE:transport_console_driver>")
+set_tests_properties(playback.console PROPERTIES TIMEOUT 30)
