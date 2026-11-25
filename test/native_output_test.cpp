@@ -2,7 +2,7 @@
 #undef AudioOutputUnitStart
 
 #include "fixture_support.hpp"
-#include "playback/transport.hpp"
+#include "playback/transport/transport.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -35,20 +35,36 @@ void check_rate(std::uint32_t rate) {
   };
   Transport transport(prepare_stems(folder.path), factory);
   const auto starts_before = muted_starts;
+  transport.seek(0.25);
+  require(transport.snapshot().status == TransportStatus::stopped &&
+              transport.snapshot().position_seconds == 0.25,
+          "Seek before first Play started playback or missed its boundary");
+  std::this_thread::sleep_for(20ms);
+  require(transport.snapshot().position_seconds == 0.25, "Stopped seek advanced");
   transport.set_track_volume(0, 0.5);
   transport.play();
-  until([&] { return transport.snapshot().position_seconds > 0; });
+  until([&] { return transport.snapshot().position_seconds > 0.25; });
   transport.pause();
   const auto paused = transport.snapshot().position_seconds;
   std::this_thread::sleep_for(30ms);
   require(transport.snapshot().position_seconds == paused, "Paused native output advanced");
   fs::rename(source, moved);
+  transport.seek(0.5);
+  require(transport.snapshot().position_seconds == 0.5 &&
+              transport.snapshot().status == TransportStatus::paused,
+          "Native paused bank switch changed playback state");
   transport.set_track_volume(0, 0);
   transport.play();
-  until([&] { return transport.snapshot().position_seconds > paused; });
+  until([&] { return transport.snapshot().position_seconds > 0.5; });
   transport.pause();
   require(outputs_created == 1 && muted_starts == starts_before + 1,
           "Native resume recreated or restarted the output");
+  transport.play();
+  transport.seek(1.0);
+  require(transport.snapshot().position_seconds >= 1.0 &&
+              transport.snapshot().status == TransportStatus::playing,
+          "Playing bank switch did not keep playback running");
+  transport.pause();
   fs::rename(moved, source);
   transport.seek(1.95);
   transport.play();
@@ -57,6 +73,8 @@ void check_rate(std::uint32_t rate) {
   until([&] { return transport.snapshot().position_seconds > 0; });
   transport.stop();
   require(transport.snapshot().position_seconds == 0, "Native stop did not reset the position");
+  require(outputs_created == 1 && muted_starts == starts_before + 1,
+          "Seek, Stop or replay recreated or restarted native output");
   std::cout << "Muted native resume and transport passed at " << rate << " Hz\n";
 }
 }

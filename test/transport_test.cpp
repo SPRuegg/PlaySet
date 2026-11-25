@@ -1,4 +1,4 @@
-#include "playback/transport.hpp"
+#include "playback/transport/transport.hpp"
 #include "fixture_support.hpp"
 
 #include <algorithm>
@@ -17,11 +17,18 @@ void require(bool condition, const char *message) {
 struct OfflineOutput final : PlaybackOutput {
   BufferedPlayback &playback;
   bool running = false;
-  std::uint64_t frame = 0;
+  std::int64_t frame = 0;
   explicit OfflineOutput(BufferedPlayback &source) : playback(source) {}
   void play() override { running = true; }
   void pause() override { running = false; }
-  std::uint64_t position_frames() const override { return frame; }
+  void seek(std::int64_t target) override {
+    playback.prepare_seek(target);
+    const auto origin = playback.apply_pending_seek();
+    require(origin.has_value(), "Prepared seek was not available at boundary");
+    frame = *origin;
+    playback.acknowledge_seek();
+  }
+  std::int64_t position_frames() const override { return frame; }
   bool finished() override { return playback.exhausted(); }
   std::vector<float> advance(std::size_t frames) {
     std::vector<float> output(frames * output_channels, 0);
@@ -36,8 +43,14 @@ void reader_seek(const fs::path &file) {
   for (auto frames = reader.read(block); frames; frames = reader.read(block))
     reference.insert(reference.end(), block.begin(), block.begin() + frames * output_channels);
   const auto length = reference.size() / output_channels;
+  reader.seek(0);
+  bool rejected = false;
+  try { reader.seek(-1); } catch (const std::invalid_argument &) { rejected = true; }
+  require(rejected, "Negative reader seek was accepted");
+  require(reader.read(block) > 0 && block[0] == reference[0],
+          "Rejected negative seek changed the reader position");
   for (const auto frame : {std::size_t{0}, length / 3, length - 1, length, length / 2, std::size_t{0}}) {
-    reader.seek(frame);
+    reader.seek(static_cast<std::int64_t>(frame));
     const auto count = reader.read(block);
     require(count == std::min(decode_block_frames, length - frame), "Seek frame count differs");
     for (std::size_t i = 0; i < count * output_channels; ++i)
@@ -47,12 +60,51 @@ void reader_seek(const fs::path &file) {
                         [](float value) { return value == 0; }), "Seek tail is not silent");
   }
 }
+void transport_seek_samples(const fs::path &file) {
+  TempFolder folder;
+  fs::copy_file(file, folder.path / file.filename());
+  auto reference_reader = StemReader::open(file);
+  std::vector<float> reference;
+  std::array<float, decode_block_frames * output_channels> samples{};
+  for (auto count = reference_reader.read(samples); count; count = reference_reader.read(samples))
+    reference.insert(reference.end(), samples.begin(), samples.begin() + count * output_channels);
+  const auto length = reference.size() / output_channels;
+  OfflineOutput *device = nullptr;
+  std::size_t created = 0;
+  auto factory = [&](BufferedPlayback &playback, double) {
+    ++created;
+    auto output = std::make_unique<OfflineOutput>(playback);
+    device = output.get();
+    return output;
+  };
+  Transport transport(prepare_stems(folder.path), factory);
+  for (const auto frame : {length / 2, std::size_t{0}, length - 1, length / 3,
+                           std::size_t{0}, length / 2}) {
+    transport.pause();
+    transport.seek(static_cast<double>(frame) / reference_reader.info().sample_rate);
+    const auto silent = device->advance(512);
+    require(std::all_of(silent.begin(), silent.end(), [](float v) { return v == 0; }),
+            "Paused seek produced audio");
+    transport.play();
+    const auto audio = device->advance(512);
+    const auto count = std::min<std::size_t>(512, length - frame);
+    for (std::size_t i = 0; i < count * output_channels; ++i)
+      require(std::abs(audio[i] - reference[frame * output_channels + i]) < 0.00001F,
+              "Bank switch rendered stale or incorrectly positioned audio");
+    require(std::all_of(audio.begin() + count * output_channels, audio.end(),
+                        [](float v) { return v == 0; }), "Bank switch EOF padding was not silent");
+  }
+  require(created == 1, "Sample-accurate seeks recreated output");
+}
+
 void transport_controls() {
   TempFolder folder;
   write_pcm_wav(folder.path / "long.wav", 44100, 1, 16, 20000);
   write_pcm_wav(folder.path / "short.wav", 44100, 1, 16, 2000);
   OfflineOutput *device = nullptr;
+  std::size_t outputs_created = 0;
   auto factory = [&](BufferedPlayback &playback, double rate) {
+    ++outputs_created;
     require(rate == 44100, "Output sample rate changed");
     auto output = std::make_unique<OfflineOutput>(playback);
     device = output.get();
@@ -118,11 +170,12 @@ void transport_controls() {
   require(transport.snapshot().position_seconds == 0, "Repeated stop failed");
 
   fs::rename(folder.path / "long.wav", folder.path / "moved.wav");
-  bool failed = false;
-  try { transport.seek(0.1); } catch (const std::exception &) { failed = true; }
-  require(failed && transport.snapshot().position_seconds == 0, "Failed seek replaced active session");
+  transport.seek(0.1);
+  require(transport.snapshot().position_seconds == 4410.0 / 44100,
+          "Seek reopened a source instead of retaining its reader");
   transport.stop();
   require(transport.snapshot().status == TransportStatus::stopped, "Stop depended on source path");
+  require(outputs_created == 1, "Transport recreated the output during seeks or restarts");
 }
 }
 int main(int argc, char **argv) {
@@ -145,6 +198,9 @@ int main(int argc, char **argv) {
     reader_seek(folder.path / "tone.wav");
     reader_seek(argv[1]);
     reader_seek(argv[2]);
+    transport_seek_samples(folder.path / "tone.wav");
+    transport_seek_samples(argv[1]);
+    transport_seek_samples(argv[2]);
     transport_controls();
     std::cout << "Transport controls and WAV/AAC/ALAC seeking passed\n";
   } catch (const std::exception &error) {

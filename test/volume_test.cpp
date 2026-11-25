@@ -1,5 +1,5 @@
 #include "fixture_support.hpp"
-#include "playback/transport.hpp"
+#include "playback/transport/transport.hpp"
 
 #include <algorithm>
 #include <array>
@@ -65,11 +65,18 @@ void ramps_and_mixing() {
 struct OfflineOutput final : PlaybackOutput {
   BufferedPlayback &playback;
   bool running = false;
-  std::uint64_t frame = 0;
+  std::int64_t frame = 0;
   explicit OfflineOutput(BufferedPlayback &source) : playback(source) {}
   void play() override { playback.settle_volumes(); running = true; }
   void pause() override { running = false; }
-  std::uint64_t position_frames() const override { return frame; }
+  void seek(std::int64_t target) override {
+    playback.prepare_seek(target);
+    const auto origin = playback.apply_pending_seek();
+    require(origin.has_value(), "Prepared seek was not available at boundary");
+    frame = *origin;
+    playback.acknowledge_seek();
+  }
+  std::int64_t position_frames() const override { return frame; }
   bool finished() override { return playback.exhausted(); }
   std::vector<float> advance(std::size_t count) {
     std::vector<float> output(count * output_channels);
@@ -189,6 +196,52 @@ void concurrent_targets() {
               "Concurrent update produced an invalid gain");
   }
 }
+void coherent_batches() {
+  TrackVolumes volumes(maximum_tracks);
+  VolumeSmoother smoother(volumes, 48000);
+  std::array<double, maximum_tracks> batch{};
+  batch.fill(0.25);
+  volumes.set_all(batch);
+  smoother.begin_render();
+  require(smoother.next_frame()[0] == 0.25, "Initial batch faded in");
+  batch.back() = std::numeric_limits<double>::quiet_NaN();
+  bool rejected = false;
+  try { volumes.set_all(batch); } catch (const std::invalid_argument &) { rejected = true; }
+  require(rejected, "Invalid batch was accepted");
+  for (TrackId id = 0; id < volumes.size(); ++id)
+    require(volumes.get(id) == 0.25, "Invalid batch partially changed targets");
+  rejected = false;
+  try { volumes.set_all(std::span(batch).first(1)); }
+  catch (const std::invalid_argument &) { rejected = true; }
+  require(rejected, "Wrong-size batch was accepted");
+
+  std::atomic<bool> start{false};
+  std::atomic<bool> done{false};
+  std::jthread writer([&] {
+    while (!start.load()) std::this_thread::yield();
+    for (std::size_t i = 0; i < 20000; ++i) {
+      batch.fill(i % 2 ? 0.75 : 0.125);
+      volumes.set_all(batch);
+    }
+    done.store(true);
+  });
+  start.store(true);
+  do {
+    smoother.settle();
+    const auto levels = smoother.next_frame();
+    for (const auto level : levels)
+      require(level == levels.front(), "Playback adopted a partial volume batch");
+  } while (!done.load());
+  writer.join();
+  smoother.settle();
+  for (const auto level : smoother.next_frame())
+    require(level == 0.75, "Completed batch was not adopted");
+  volumes.set(0, 0.5);
+  smoother.settle();
+  const auto levels = smoother.next_frame();
+  require(levels[0] == 0.5 && levels[1] == 0.75,
+          "Single-track update changed another track");
+}
 }
 int main() {
   try {
@@ -197,6 +250,7 @@ int main() {
     transport_volumes(VolumeSmoothing::exponential);
     transport_volumes(VolumeSmoothing::linear);
     concurrent_targets();
+    coherent_batches();
     std::cout << "Independent track volumes, smoothing, persistence and concurrent updates passed\n";
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';

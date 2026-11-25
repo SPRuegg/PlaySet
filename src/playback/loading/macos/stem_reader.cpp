@@ -1,4 +1,4 @@
-#include "playback/stem_loader.hpp"
+#include "playback/loading/stem_loader.hpp"
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
@@ -102,7 +102,7 @@ StemReader StemReader::open(const std::filesystem::path& path) {
     impl->info.format = is_wav ? StemFormat::wav : StemFormat::m4a;
     impl->info.sample_rate = source.mSampleRate;
     impl->info.channels = source.mChannelsPerFrame;
-    impl->info.frames = static_cast<std::uint64_t>(length);
+    impl->info.frames = length;
 
     AudioStreamBasicDescription client{};
     client.mSampleRate = source.mSampleRate;
@@ -123,7 +123,8 @@ StemReader StemReader::open(const std::filesystem::path& path) {
 
 const StemInfo& StemReader::info() const noexcept { return impl_->info; }
 
-void StemReader::seek(std::uint64_t frame) {
+void StemReader::seek(std::int64_t frame) {
+    if (frame < 0) throw std::invalid_argument("Seek frame must not be negative.");
     frame = std::min(frame, impl_->info.frames);
     impl_->check(ExtAudioFileSeek(impl_->file, static_cast<SInt64>(frame)),
                  "Could not seek stem");

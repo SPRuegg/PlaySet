@@ -28,14 +28,28 @@ void StemBlockQueue::commit_write() noexcept {
   write_index_.store(write + 1, std::memory_order_release);
 }
 
-RenderResult StemBlockQueue::render(std::span<float> output, VolumeSmoother *volume) noexcept {
+void StemBlockQueue::reset() noexcept {
+  read_index_.store(0, std::memory_order_relaxed);
+  write_index_.store(0, std::memory_order_relaxed);
+  read_offset_ = 0;
+}
+
+RenderResult StemBlockQueue::render(std::span<float> output, VolumeSmoother *volume,
+                                    bool producer_finished) noexcept {
   assert(output.size() % output_channels == 0);
   std::fill(output.begin(), output.end(), 0.0F);
   RenderResult result;
   auto read = read_index_.load(std::memory_order_relaxed);
   const auto requested = output.size() / output_channels;
-  while (result.frames < requested &&
-         read != write_index_.load(std::memory_order_acquire)) {
+  assert(requested <= maximum_render_frames);
+  const auto write = write_index_.load(std::memory_order_acquire);
+  if (!producer_finished) {
+    std::size_t available = 0;
+    for (auto index = read; index != write && available < requested; ++index)
+      available += blocks_[index % capacity].frames - (index == read ? read_offset_ : 0);
+    if (available < requested) return result;
+  }
+  while (result.frames < requested && read != write) {
     const auto &block = blocks_[read % capacity];
     const auto count =
         std::min(requested - result.frames, block.frames - read_offset_);
@@ -54,7 +68,7 @@ RenderResult StemBlockQueue::render(std::span<float> output, VolumeSmoother *vol
 }
 
 std::size_t StemBlockQueue::ready_blocks() const noexcept {
-  // Only called by the consumer (or the control thread before output starts).
+  // Consumer, control thread before output starts, or producer of an inactive bank.
   const auto read = read_index_.load(std::memory_order_relaxed);
   return static_cast<std::size_t>(write_index_.load(std::memory_order_acquire) -
                                   read);

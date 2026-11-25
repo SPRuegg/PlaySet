@@ -1,6 +1,6 @@
 #pragma once
 
-#include "audio_output.hpp"
+#include "playback/output/audio_output.hpp"
 
 #include <functional>
 #include <string>
@@ -40,17 +40,13 @@ public:
   [[nodiscard]] TransportSnapshot snapshot();
 
 private:
-  struct Session;
-  void replace(std::uint64_t frame, TransportStatus status);
   std::vector<StemInfo> stems_;
   double sample_rate_;
-  std::uint64_t total_frames_ = 0;
-  OutputFactory output_factory_;
-  VolumeSmoothing smoothing_;
+  std::int64_t total_frames_ = 0;
   std::shared_ptr<TrackVolumes> volumes_;
-  std::unique_ptr<Session> session_;
+  std::unique_ptr<BufferedPlayback> playback_;
+  std::unique_ptr<PlaybackOutput> output_;
   TransportStatus status_ = TransportStatus::stopped;
-  bool rewind_required_ = false;
 };
 
 } // namespace playset

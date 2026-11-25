@@ -15,11 +15,17 @@ struct RenderResult {
 // front.
 class StemBlockQueue {
 public:
-  static constexpr std::size_t capacity = 8;
+  static constexpr std::size_t maximum_render_frames = 4096;
+  // One extra block lets a full callback fit even with a partly consumed head.
+  static constexpr std::size_t capacity = maximum_render_frames / playback_block_frames + 1;
   explicit StemBlockQueue(std::size_t track_count);
   StemBlock *begin_write() noexcept;
   void commit_write() noexcept;
-  RenderResult render(std::span<float> output, VolumeSmoother *volume = nullptr) noexcept;
+  // Inactive bank only, after its previous consumer has acknowledged the switch.
+  void reset() noexcept;
+  // At most maximum_render_frames; keep audio untouched on shortage unless finished.
+  RenderResult render(std::span<float> output, VolumeSmoother *volume = nullptr,
+                      bool producer_finished = false) noexcept;
   [[nodiscard]] std::size_t ready_blocks() const noexcept;
 
 private:

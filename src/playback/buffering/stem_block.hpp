@@ -1,7 +1,7 @@
 #pragma once
 
-#include "stem_loader.hpp"
-#include "track_volume.hpp"
+#include "playback/loading/stem_loader.hpp"
+#include "playback/mixing/track_volume.hpp"
 
 #include <cstdint>
 #include <span>

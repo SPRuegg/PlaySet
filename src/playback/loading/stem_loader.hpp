@@ -18,9 +18,11 @@ struct StemInfo {
   StemFormat format;
   double sample_rate;
   std::uint32_t channels;
-  std::uint64_t frames;
+  std::int64_t frames;
 
-  [[nodiscard]] double duration_seconds() const noexcept;
+  [[nodiscard]] double duration_seconds() const noexcept {
+    return static_cast<double>(frames) / sample_rate;
+  }
 };
 
 // Blocking, single-thread-owned decoder. Never call from an audio callback.
@@ -39,7 +41,7 @@ public:
   // Returns frames read and zeroes unused output. An empty buffer is a no-op;
   // otherwise, zero returned frames indicates end of file.
   std::size_t read(std::span<float> output);
-  void seek(std::uint64_t frame);
+  void seek(std::int64_t frame);
 
 private:
   struct Impl;

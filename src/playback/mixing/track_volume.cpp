@@ -6,6 +6,14 @@
 
 namespace playset {
 static_assert(std::atomic<double>::is_always_lock_free);
+static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
+
+namespace {
+void require_volume(double volume) {
+  if (!std::isfinite(volume) || volume < 0 || volume > 1)
+    throw std::invalid_argument("Track volume must be between 0 and 1.");
+}
+}
 
 TrackVolumes::TrackVolumes(std::size_t count) : count_(count) {
   if (count == 0 || count > maximum_tracks)
@@ -15,13 +23,22 @@ TrackVolumes::TrackVolumes(std::size_t count) : count_(count) {
 }
 void TrackVolumes::set(TrackId id, double volume) {
   if (id >= count_) throw std::out_of_range("Unknown track ID.");
-  if (!std::isfinite(volume) || volume < 0 || volume > 1)
-    throw std::invalid_argument("Track volume must be between 0 and 1.");
-  targets_[id].store(volume, std::memory_order_relaxed);
+  require_volume(volume);
+  revision_.fetch_add(1);
+  targets_[id].store(volume);
+  revision_.fetch_add(1);
+}
+void TrackVolumes::set_all(std::span<const double> volumes) {
+  if (volumes.size() != count_)
+    throw std::invalid_argument("Volume batch must match the track count.");
+  for (const auto volume : volumes) require_volume(volume);
+  revision_.fetch_add(1);
+  for (TrackId id = 0; id < count_; ++id) targets_[id].store(volumes[id]);
+  revision_.fetch_add(1);
 }
 double TrackVolumes::get(TrackId id) const {
   if (id >= count_) throw std::out_of_range("Unknown track ID.");
-  return targets_[id].load(std::memory_order_relaxed);
+  return targets_[id].load();
 }
 VolumeSmoother::VolumeSmoother(const TrackVolumes &volumes, double sample_rate,
                                VolumeSmoothing mode)
@@ -33,10 +50,19 @@ VolumeSmoother::VolumeSmoother(const TrackVolumes &volumes, double sample_rate,
   constexpr double smoothing_seconds = 0.005;
   smoothing_ = 1 - std::exp(-1 / (sample_rate * smoothing_seconds));
   ramp_frames_ = std::max<std::size_t>(1, std::llround(sample_rate * smoothing_seconds));
+  std::fill_n(current_.begin(), volumes.size(), 1.0);
+  std::fill_n(target_.begin(), volumes.size(), 1.0);
 }
 void VolumeSmoother::begin_render() noexcept {
+  // Sequentially consistent revision and target accesses make this one snapshot.
+  const auto revision = volumes_.revision_.load();
+  if ((revision & 1) || (initialized_ && revision == revision_)) return;
+  for (TrackId id = 0; id < volumes_.size(); ++id)
+    pending_[id] = volumes_.targets_[id].load();
+  // Reject a torn snapshot without waiting or changing any smoothing state.
+  if (revision != volumes_.revision_.load()) return;
   for (TrackId id = 0; id < volumes_.size(); ++id) {
-    const auto value = volumes_.targets_[id].load(std::memory_order_relaxed);
+    const auto value = pending_[id];
     if (!initialized_) {
       current_[id] = target_[id] = value;
     } else if (value != target_[id]) {
@@ -48,6 +74,7 @@ void VolumeSmoother::begin_render() noexcept {
     }
   }
   initialized_ = true;
+  revision_ = revision;
 }
 void VolumeSmoother::settle() noexcept {
   begin_render();
