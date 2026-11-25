@@ -1,6 +1,6 @@
 # TrackVolumes
 
-`TrackVolumes` stores the requested volume and mute state for each track. Every track starts at its original level and can be turned down independently, all the way to silence.
+`TrackVolumes` stores the requested volume, mute state, and solo state for each track. Every track starts at its original level and can be turned down independently, all the way to silence.
 
 ## Definition
 
@@ -14,17 +14,22 @@ public:
   void set_all(std::span<const double> volumes);
   void set_muted(TrackId id, bool muted);
   void set_muted(std::span<const TrackId> ids, bool muted);
+  void set_solo(TrackId id, bool enabled);
+  void set_soli(std::span<const TrackId> ids, bool enabled);
   [[nodiscard]] double get(TrackId id) const;
   [[nodiscard]] bool is_muted(TrackId id) const;
+  [[nodiscard]] bool is_solo(TrackId id) const;
   [[nodiscard]] std::size_t size() const noexcept { return count_; }
 
 private:
   friend class VolumeSmoother;
+  void change_solo(std::span<const TrackId> ids, bool enabled, bool exclusive);
   std::size_t count_;
   // One control-thread publisher; odd revisions mark an unfinished update.
   std::atomic<std::uint64_t> revision_{0};
   std::array<std::atomic<double>, maximum_tracks> targets_{};
   std::array<std::atomic<bool>, maximum_tracks> muted_{};
+  std::array<std::atomic<bool>, maximum_tracks> solo_{};
 };
 ```
 
@@ -39,6 +44,9 @@ Implemented in `src/playback/mixing/track_volume.cpp`.
 | `set_all(volumes)` | Changes every track's requested volume as one batch, in track-ID order. |
 | `set_muted(id, muted)` | Mutes or unmutes a track without changing its requested volume. |
 | `set_muted(ids, muted)` | Mutes or unmutes your selected tracks together as one batch. |
+| `set_solo(id, enabled)` | Enables an exclusive solo, or disables solo for that track. |
+| `set_soli(ids, enabled)` | Adds or removes your selected tracks from the solo selection. |
+| `is_solo(id)` | Returns whether the track is selected for solo. |
 | `is_muted(id)` | Returns whether the track is muted. |
 | `get(id)` | Returns one track's requested volume. |
 | `size()` | Returns the number of tracks without changing anything or throwing an exception. |
@@ -89,6 +97,22 @@ This mutes tracks `0` and `2` together while leaving track `1` unchanged. Pass `
 
 Every ID is checked before any mute flags change. If one is invalid, the whole request throws `std::out_of_range` without changing any tracks. An empty selection does nothing, and repeated IDs have the same effect as listing each track once. These are selections you supply, rather than stored groups or buses.
 
+### Solo and Soli
+
+Tracks start with solo disabled. When no tracks are soloed, every unmuted track can play at its requested volume.
+
+Call `set_solo(id, true)` when you want to hear just one track. Enabling it clears the other solo selections. For example, soloing track `2` replaces an earlier solo on track `0`.
+
+To hear several tracks together, pass their IDs to `set_soli(ids, true)`. This adds those tracks to the existing selection without clearing earlier solos. You can call it again to add more tracks.
+
+Pass `false` to either method to remove only the tracks you name. Disabling one solo does not clear the others. Once you remove the last solo, normal playback returns.
+
+Mute still takes priority. If you solo a muted track, it stays silent. It still counts as selected for solo, so an exclusively soloed, muted track leaves the whole mix silent. Your requested volumes and mute flags stay unchanged through solo changes.
+
+Like mute, live solo changes use the selected smoothing mode. Paused edits settle before audio resumes. `is_solo()` reports your selection, rather than whether a track is currently audible.
+
+`set_soli()` accepts 1 through 256 IDs. Empty or oversized selections throw `std::invalid_argument`. An invalid ID throws `std::out_of_range` before any solo flags change. Repeated IDs have the same effect as listing each track once.
+
 ## Validation
 
 The constructor accepts between 1 and 256 tracks. That count stays fixed for the lifetime of the object.
@@ -97,7 +121,7 @@ The constructor accepts between 1 and 256 tracks. That count stays fixed for the
 
 `set_all()` requires exactly one value per track. It validates the entire batch before publishing, so an invalid value or count throws `std::invalid_argument` without changing any levels.
 
-An unknown track ID passed to `set()`, `get()`, `set_muted()`, or `is_muted()` throws `std::out_of_range`. An invalid constructor count throws `std::invalid_argument`.
+An unknown track ID passed to `set()`, `get()`, `set_muted()`, `is_muted()`, `set_solo()`, or `is_solo()` throws `std::out_of_range`. An invalid constructor count throws `std::invalid_argument`.
 
 ## Sharing levels with playback
 
@@ -109,7 +133,9 @@ Use `set_all()` when several levels should change together. Separate `set()` cal
 
 Mute flags are read within the same revision check as the volumes. Playback accepts a complete set of effective levels, with muted tracks targeting zero. Changing volume does not clear mute.
 
-Keep all `set()`, `set_all()`, and `set_muted()` calls on one control thread. This publication scheme supports one writer while playback reads concurrently.
+Solo flags are checked within the same revision as mute and volume. If any track is soloed, unselected tracks target zero. An exclusive solo switch clears the old selection and enables the new one in a single publication, so playback never adopts half of that change.
+
+Keep all `set()`, `set_all()`, `set_muted()`, `set_solo()`, and `set_soli()` calls on one control thread. This publication scheme supports one writer while playback reads concurrently.
 
 `friend class VolumeSmoother` lets the smoother read the stored targets directly. Other callers use the public methods.
 

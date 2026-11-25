@@ -84,8 +84,16 @@ std::vector<TrackSnapshot> Transport::tracks() const {
   std::vector<TrackSnapshot> result;
   result.reserve(stems_.size());
   for (TrackId id = 0; id < stems_.size(); ++id)
-    result.push_back({id, stems_[id].path.stem().string(), volumes_->get(id), volumes_->is_muted(id)});
+    result.push_back({id, stems_[id].path.stem().string(), volumes_->get(id),
+                      volumes_->is_muted(id), volumes_->is_solo(id)});
   return result;
+}
+
+void Transport::set_track_solo(TrackId id, bool enabled) {
+  volumes_->set_solo(id, enabled);
+}
+void Transport::set_tracks_soli(std::span<const TrackId> ids, bool enabled) {
+  volumes_->set_soli(ids, enabled);
 }
 
 } // namespace playset

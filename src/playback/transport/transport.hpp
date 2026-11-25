@@ -14,6 +14,7 @@ struct TrackSnapshot {
   std::string name;
   double volume;
   bool muted = false;
+  bool solo = false;
 };
 
 struct TransportSnapshot {
@@ -40,6 +41,8 @@ public:
   void set_track_volume(TrackId id, double volume);
   void set_track_muted(TrackId id, bool muted);
   void set_tracks_muted(std::span<const TrackId> ids, bool muted);
+  void set_track_solo(TrackId id, bool enabled);
+  void set_tracks_soli(std::span<const TrackId> ids, bool enabled);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
   [[nodiscard]] TransportSnapshot snapshot();
 

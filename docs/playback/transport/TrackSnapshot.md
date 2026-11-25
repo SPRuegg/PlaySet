@@ -12,6 +12,7 @@ struct TrackSnapshot {
   std::string name;
   double volume;
   bool muted = false;
+  bool solo = false;
 };
 ```
 
@@ -21,6 +22,7 @@ struct TrackSnapshot {
 | --- | --- | --- |
 | `id` | `TrackId` | Track index used when requesting volume changes. |
 | `name` | `std::string` | Source filename without its final extension. |
+| `solo` | `bool` | Whether you have selected the track for solo. |
 | `muted` | `bool` | Whether you have requested that the track be muted. |
 | `volume` | `double` | Requested volume multiplier from `0` through `1`. |
 
@@ -31,6 +33,8 @@ The volume is the requested setting. While a live change is being smoothed, the 
 Because you receive copies of the track information, editing a snapshot does not change playback. To adjust a track, pass its ID and your requested volume to `set_track_volume()`.
 
 `muted` reports your requested mute state. A live mute can still be fading to silence when you read it. The `volume` field keeps its requested value even while muted, so unmuting restores that level.
+
+`solo` reports whether you selected the track, not whether it is audible. A muted, soloed track still reports both flags as `true` and stays silent. Pausing, stopping, seeking, and replaying preserve both settings.
 
 ## Example
 

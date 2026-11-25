@@ -264,6 +264,131 @@ void transport_mutes(VolumeSmoothing mode) {
   require(created == 1, "Mute recreated output");
 }
 
+void solo_controls(VolumeSmoothing mode) {
+  TrackVolumes volumes(3);
+  VolumeSmoother smoother(volumes, 48000, mode);
+  require(!volumes.is_solo(0), "Tracks must start without solo");
+  smoother.begin_render();
+  volumes.set_solo(0, true);
+  smoother.begin_render();
+  auto gains = smoother.next_frame();
+  require(gains[0] == 1 && gains[1] > 0 && gains[1] < 1, "Solo bypassed live smoothing");
+  smoother.settle();
+  gains = smoother.next_frame();
+  require(gains[0] == 1 && gains[1] == 0 && gains[2] == 0, "Exclusive solo did not isolate track");
+  const std::array<TrackId, 2> selected{1, 2};
+  volumes.set_soli(selected, true);
+  smoother.settle();
+  for (auto gain : smoother.next_frame()) require(gain == 1, "Additive soli replaced previous solo");
+  volumes.set_muted(1, true);
+  volumes.set(1, 0.5);
+  smoother.settle();
+  require(smoother.next_frame()[1] == 0 && volumes.is_solo(1) && volumes.get(1) == 0.5,
+          "Solo overrode mute or changed volume");
+  volumes.set_solo(1, true);
+  smoother.settle();
+  for (auto gain : smoother.next_frame()) require(gain == 0, "Muted solo let another track through");
+  require(!volumes.is_solo(0) && volumes.is_solo(1) && !volumes.is_solo(2),
+          "Exclusive enable did not replace soli selection");
+  volumes.set_soli(selected, true);
+  volumes.set_solo(1, false);
+  require(volumes.is_solo(2), "Disabling single solo cleared other selections");
+  const std::array<TrackId, 2> invalid{0, 3};
+  bool rejected = false;
+  try { volumes.set_soli(invalid, true); } catch (const std::out_of_range &) { rejected = true; }
+  require(rejected && !volumes.is_solo(0) && volumes.is_solo(2), "Invalid soli changed part of selection");
+  rejected = false;
+  try { volumes.set_solo(3, true); } catch (const std::out_of_range &) { rejected = true; }
+  require(rejected && volumes.is_solo(2), "Invalid exclusive solo cleared selection");
+  rejected = false;
+  try { volumes.set_soli({}, true); } catch (const std::invalid_argument &) { rejected = true; }
+  require(rejected, "Empty soli was accepted");
+  std::array<TrackId, maximum_tracks + 1> oversized{};
+  for (const auto enabled : {true, false}) {
+    rejected = false;
+    try { volumes.set_soli(oversized, enabled); }
+    catch (const std::invalid_argument &) { rejected = true; }
+    require(rejected && !volumes.is_solo(0) && !volumes.is_solo(1) && volumes.is_solo(2),
+            "Oversized soli changed the selection or was accepted");
+  }
+  const std::array<TrackId, 3> duplicates{0, 0, 0};
+  volumes.set_soli(duplicates, true);
+  require(volumes.is_solo(0) && !volumes.is_solo(1) && volumes.is_solo(2),
+          "Duplicate soli IDs changed unrelated selections");
+  volumes.set_soli(duplicates, false);
+  require(!volumes.is_solo(0) && !volumes.is_solo(1) && volumes.is_solo(2),
+          "Disabling duplicate soli IDs cleared another solo");
+  rejected = false;
+  try { static_cast<void>(volumes.is_solo(3)); } catch (const std::out_of_range &) { rejected = true; }
+  require(rejected, "Invalid solo getter ID was accepted");
+  volumes.set_soli(selected, false);
+  smoother.settle();
+  gains = smoother.next_frame();
+  require(gains[0] == 1 && gains[1] == 0 && gains[2] == 1, "Clearing solos lost independent mute");
+  volumes.set_muted(1, false);
+  smoother.settle();
+  require(smoother.next_frame()[1] == 0.5, "Solo changes lost saved volume");
+}
+
+void transport_solos(VolumeSmoothing mode) {
+  TempFolder folder;
+  write_pcm_wav(folder.path / "A.wav", 48000, 1, 16, 48000);
+  write_pcm_wav(folder.path / "B.wav", 48000, 1, 16, 48000);
+  OfflineOutput *device = nullptr;
+  std::size_t created = 0;
+  auto factory = [&](BufferedPlayback &playback, double) {
+    ++created;
+    auto output = std::make_unique<OfflineOutput>(playback);
+    device = output.get();
+    return output;
+  };
+  Transport transport(prepare_stems(folder.path), factory, mode);
+  transport.set_track_solo(0, true);
+  transport.play();
+  require(device->advance(512).front() == 0.25F, "Pre-play solo leaked another track");
+  transport.pause();
+  const auto paused = transport.snapshot().position_seconds;
+  transport.set_track_solo(1, true);
+  transport.set_track_muted(1, true);
+  require(transport.snapshot().position_seconds == paused, "Paused solo moved position");
+  transport.play();
+  require(device->advance(512).front() == 0, "Paused solo/mute edit leaked on resume");
+  transport.seek(0.1);
+  require(device->advance(512).front() == 0, "Seek lost solo/mute states");
+  transport.stop();
+  transport.play();
+  require(device->advance(512).front() == 0, "Stop lost solo state");
+  transport.seek(transport.snapshot().duration_seconds);
+  transport.play();
+  require(device->advance(512).front() == 0, "Replay lost solo state");
+  transport.pause();
+  const std::array<TrackId, 2> selected{0, 1};
+  transport.set_tracks_soli(selected, true);
+  transport.play();
+  require(device->advance(512).front() == 0.25F, "Additive soli bypassed mute");
+  const auto tracks = transport.tracks();
+  require(tracks[0].solo && tracks[1].solo && tracks[1].muted && created == 1,
+          "Solo state was lost or output was recreated");
+}
+
+void coherent_solos() {
+  TrackVolumes volumes(2);
+  volumes.set_solo(0, true);
+  VolumeSmoother smoother(volumes, 48000);
+  smoother.settle();
+  std::atomic<bool> done{false};
+  std::jthread writer([&] {
+    for (int i = 0; i < 20000; ++i) volumes.set_solo(i % 2, true);
+    done.store(true);
+  });
+  do {
+    smoother.settle();
+    const auto gains = smoother.next_frame();
+    require(gains[0] + gains[1] == 1, "Playback adopted a partial exclusive solo update");
+  } while (!done.load());
+  writer.join();
+}
+
 void exponential_smoothing() {
   for (const auto rate : {44100.0, 48000.0, 192000.0}) {
     TrackVolumes volumes(1);
@@ -369,7 +494,10 @@ int main() {
   try {
     ramps_and_mixing();
     batch_mutes();
+    coherent_solos();
     for (auto mode : {VolumeSmoothing::exponential, VolumeSmoothing::linear}) {
+      solo_controls(mode);
+      transport_solos(mode);
       mute_controls(mode);
       transport_mutes(mode);
     }

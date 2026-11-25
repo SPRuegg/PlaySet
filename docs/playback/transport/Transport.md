@@ -24,6 +24,8 @@ public:
   void set_track_volume(TrackId id, double volume);
   void set_track_muted(TrackId id, bool muted);
   void set_tracks_muted(std::span<const TrackId> ids, bool muted);
+  void set_track_solo(TrackId id, bool enabled);
+  void set_tracks_soli(std::span<const TrackId> ids, bool enabled);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
   [[nodiscard]] TransportSnapshot snapshot();
   // Private song, buffering, output, and state fields omitted here.
@@ -44,6 +46,8 @@ Implemented in `src/playback/transport/transport.cpp`.
 | `set_track_volume(id, volume)` | Sets one track's requested volume from `0` through `1`. |
 | `set_track_muted(id, muted)` | Mutes or unmutes one track while preserving its requested volume. |
 | `set_tracks_muted(ids, muted)` | Mutes or unmutes your selected tracks as one coherent update. |
+| `set_track_solo(id, enabled)` | Enables an exclusive solo, or disables solo for that track. |
+| `set_tracks_soli(ids, enabled)` | Adds or removes selected tracks without clearing other solos. |
 | `tracks()` | Returns track IDs, names, and requested volumes. |
 | `snapshot()` | Returns the current status, position, and duration. |
 
@@ -80,6 +84,10 @@ Call `set_track_muted(id, true)` to mute a track and pass `false` to unmute it. 
 To change several tracks together, pass their IDs and a mute state to `set_tracks_muted()`. Only those tracks change, and the whole selection is published together. An invalid ID rejects the entire request.
 
 Mute state stays with the loaded track through Pause, Stop, Seek, and replay. `tracks()` includes that requested state as `muted`.
+
+Call `set_track_solo(id, true)` to hear just one track, replacing any previous solo selection. To add several tracks without clearing existing solos, pass their IDs to `set_tracks_soli(ids, true)`. Passing `false` removes only the tracks you name. Removing the last solo restores normal playback.
+
+Muted tracks stay silent even when soloed. Solo changes preserve requested volumes and mute flags, use the selected smoothing mode while playing, and settle before resuming from pause. Both solo APIs keep their selections through Stop, Seek, and replay. `tracks()` reports each track's requested `solo` state.
 
 `tracks()` returns copies of the current track information. `snapshot()` also checks for background failures and recognizes when the output has finished playing the song's final audio. It can therefore update the status to `ended`.
 
