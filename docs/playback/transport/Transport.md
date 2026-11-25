@@ -47,7 +47,7 @@ Implemented in `src/playback/transport/transport.cpp`.
 
 Move a `PreparedSong` into the constructor to hand over its readers. The transport initially stays stopped at the beginning; constructing it does not start audible playback.
 
-By default, the output factory creates the native macOS output. You can supply another factory, such as a test output that renders into memory. Your factory receives the buffered playback instance and the song's sample rate.
+By default, [make_audio_output()](../output/make_audio_output.md) creates the native macOS output. You can supply another factory, such as a test output that renders into memory. Your factory receives the buffered playback instance and the song's sample rate, and returns a [PlaybackOutput](../output/PlaybackOutput.md).
 
 Only one output is created for the loaded transport. Seeking, stopping, and replaying reuse it, along with the original stem readers. Track IDs and volume controls stay the same throughout those operations.
 

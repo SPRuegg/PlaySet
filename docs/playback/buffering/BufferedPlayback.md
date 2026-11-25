@@ -107,4 +107,4 @@ std::array<float, playset::playback_block_frames * playset::output_channels> out
 const auto frames = playback.render(output);
 ```
 
-This prepares buffered playback and renders one batch into memory. Sending that buffer to an audio device is handled separately by the output component.
+This prepares buffered playback and renders one batch into memory. Sending that buffer to an audio device is handled separately by [PlaybackOutput](../output/PlaybackOutput.md).
