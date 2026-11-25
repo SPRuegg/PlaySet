@@ -6,6 +6,7 @@
 
 namespace playset {
 static_assert(std::atomic<double>::is_always_lock_free);
+static_assert(std::atomic<bool>::is_always_lock_free);
 static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
 
 namespace {
@@ -40,6 +41,21 @@ double TrackVolumes::get(TrackId id) const {
   if (id >= count_) throw std::out_of_range("Unknown track ID.");
   return targets_[id].load();
 }
+void TrackVolumes::set_muted(TrackId id, bool muted) {
+  set_muted(std::span(&id, 1), muted);
+}
+void TrackVolumes::set_muted(std::span<const TrackId> ids, bool muted) {
+  for (const auto id : ids)
+    if (id >= count_) throw std::out_of_range("Unknown track ID.");
+  if (ids.empty()) return;
+  revision_.fetch_add(1);
+  for (const auto id : ids) muted_[id].store(muted);
+  revision_.fetch_add(1);
+}
+bool TrackVolumes::is_muted(TrackId id) const {
+  if (id >= count_) throw std::out_of_range("Unknown track ID.");
+  return muted_[id].load();
+}
 VolumeSmoother::VolumeSmoother(const TrackVolumes &volumes, double sample_rate,
                                VolumeSmoothing mode)
     : volumes_(volumes), mode_(mode) {
@@ -58,7 +74,7 @@ void VolumeSmoother::begin_render() noexcept {
   const auto revision = volumes_.revision_.load();
   if ((revision & 1) || (initialized_ && revision == revision_)) return;
   for (TrackId id = 0; id < volumes_.size(); ++id)
-    pending_[id] = volumes_.targets_[id].load();
+    pending_[id] = volumes_.muted_[id].load() ? 0 : volumes_.targets_[id].load();
   // Reject a torn snapshot without waiting or changing any smoothing state.
   if (revision != volumes_.revision_.load()) return;
   for (TrackId id = 0; id < volumes_.size(); ++id) {

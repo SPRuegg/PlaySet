@@ -144,6 +144,126 @@ void transport_volumes(VolumeSmoothing mode) {
   require(tracks[0].id == original[0].id && tracks[1].id == original[1].id &&
           tracks[0].volume == 0 && tracks[1].volume == 1, "Track identities or levels changed");
 }
+void mute_controls(VolumeSmoothing mode) {
+  TrackVolumes volumes(2);
+  require(!volumes.is_muted(0) && !volumes.is_muted(1), "Tracks must load unmuted");
+  volumes.set(0, 0.5);
+  VolumeSmoother smoother(volumes, 48000, mode);
+  smoother.begin_render();
+  require(smoother.next_frame()[0] == 0.5, "Initial level changed");
+  volumes.set_muted(0, true);
+  smoother.begin_render();
+  auto levels = smoother.next_frame();
+  require(levels[0] > 0 && levels[0] < 0.5 && levels[1] == 1,
+          "Live mute jumped or changed a different track");
+  for (int frame = 0; frame < 9600; ++frame) levels = smoother.next_frame();
+  require(levels[0] == 0 && volumes.get(0) == 0.5,
+          "Mute did not reach silence or overwrote stored volume");
+  volumes.set(0, 0.75);
+  smoother.settle();
+  require(smoother.next_frame()[0] == 0 && volumes.is_muted(0),
+          "Editing muted volume made the track audible");
+  const std::array<double, 2> batch{0.25, 0.5};
+  volumes.set_all(batch);
+  smoother.settle();
+  levels = smoother.next_frame();
+  require(levels[0] == 0 && levels[1] == 0.5, "Volume batch cleared mute");
+  volumes.set_muted(0, false);
+  smoother.begin_render();
+  levels = smoother.next_frame();
+  require(levels[0] > 0 && levels[0] < 0.25,
+          "Live unmute did not ramp toward saved level");
+  smoother.settle();
+  require(smoother.next_frame()[0] == 0.25, "Unmute lost edited volume");
+  for (bool muted : {true, false}) {
+    bool rejected = false;
+    try { volumes.set_muted(2, muted); } catch (const std::out_of_range &) { rejected = true; }
+    require(rejected && !volumes.is_muted(0), "Invalid mute ID changed state");
+  }
+  bool rejected = false;
+  try { static_cast<void>(volumes.is_muted(2)); } catch (const std::out_of_range &) { rejected = true; }
+  require(rejected, "Mute getter accepted an invalid ID");
+}
+
+void batch_mutes() {
+  TrackVolumes volumes(3);
+  const std::array<TrackId, 2> selected{0, 2};
+  volumes.set_muted(selected, true);
+  require(volumes.is_muted(0) && !volumes.is_muted(1) && volumes.is_muted(2),
+          "Batch mute changed unselected tracks");
+  const std::array<TrackId, 2> invalid{1, 3};
+  bool rejected = false;
+  try { volumes.set_muted(invalid, true); } catch (const std::out_of_range &) { rejected = true; }
+  require(rejected && !volumes.is_muted(1), "Invalid batch partly changed mute state");
+  volumes.set_muted(std::span<const TrackId>{}, false);
+  require(volumes.is_muted(0), "Empty mute batch changed state");
+  const std::array<TrackId, 3> duplicates{0, 2, 0};
+  volumes.set_muted(duplicates, false);
+  require(!volumes.is_muted(0) && !volumes.is_muted(2), "Batch unmute failed");
+
+  TrackVolumes grouped(maximum_tracks);
+  std::array<TrackId, maximum_tracks> ids{};
+  for (TrackId id = 0; id < ids.size(); ++id) ids[id] = id;
+  VolumeSmoother smoother(grouped, 48000);
+  smoother.settle();
+  std::atomic<bool> done{false};
+  std::jthread writer([&] {
+    for (int i = 0; i < 20000; ++i) grouped.set_muted(ids, i % 2 == 0);
+    done.store(true);
+  });
+  do {
+    smoother.settle();
+    const auto gains = smoother.next_frame();
+    for (auto gain : gains)
+      require(gain == gains.front(), "Playback adopted only part of a mute batch");
+  } while (!done.load());
+  writer.join();
+  smoother.settle();
+  require(smoother.next_frame()[0] == 1, "Final unmute batch was not adopted");
+}
+
+void transport_mutes(VolumeSmoothing mode) {
+  TempFolder folder;
+  write_pcm_wav(folder.path / "A.wav", 48000, 1, 16, 48000);
+  write_pcm_wav(folder.path / "B.wav", 48000, 1, 16, 48000);
+  OfflineOutput *device = nullptr;
+  std::size_t created = 0;
+  auto factory = [&](BufferedPlayback &playback, double) {
+    ++created;
+    auto output = std::make_unique<OfflineOutput>(playback);
+    device = output.get();
+    return output;
+  };
+  Transport transport(prepare_stems(folder.path), factory, mode);
+  transport.set_track_muted(0, true);
+  transport.play();
+  require(device->advance(512).front() == 0.25F, "Pre-play mute leaked audio");
+  transport.pause();
+  const auto paused = transport.snapshot().position_seconds;
+  const std::array<TrackId, 2> both{0, 1};
+  transport.set_tracks_muted(both, true);
+  transport.set_track_volume(0, 0.5);
+  require(transport.snapshot().position_seconds == paused, "Paused mute moved position");
+  transport.play();
+  require(device->advance(512).front() == 0, "Paused mute leaked audio on resume");
+  transport.seek(0.1);
+  require(device->advance(512).front() == 0, "Seek lost mute state");
+  transport.stop();
+  transport.play();
+  require(device->advance(512).front() == 0, "Stop lost mute state");
+  transport.seek(transport.snapshot().duration_seconds);
+  transport.play();
+  require(device->advance(512).front() == 0, "Replay lost mute state");
+  transport.pause();
+  transport.set_track_muted(0, false);
+  transport.play();
+  require(device->advance(512).front() == 0.125F, "Unmute did not restore edited level");
+  const auto tracks = transport.tracks();
+  require(!tracks[0].muted && tracks[1].muted && tracks[0].volume == 0.5 && tracks[1].volume == 1,
+          "Track snapshot lost mute state or requested volume");
+  require(created == 1, "Mute recreated output");
+}
+
 void exponential_smoothing() {
   for (const auto rate : {44100.0, 48000.0, 192000.0}) {
     TrackVolumes volumes(1);
@@ -186,8 +306,10 @@ void concurrent_targets() {
   TrackVolumes volumes(maximum_tracks);
   VolumeSmoother ramp(volumes, 192000);
   std::jthread writer([&] {
-    for (std::size_t i = 0; i < 20000; ++i)
+    for (std::size_t i = 0; i < 20000; ++i) {
       volumes.set(i % maximum_tracks, static_cast<double>(i % 101) / 100);
+      volumes.set_muted(i % maximum_tracks, i % 2 == 0);
+    }
   });
   for (std::size_t i = 0; i < 2000; ++i) {
     ramp.begin_render();
@@ -246,6 +368,11 @@ void coherent_batches() {
 int main() {
   try {
     ramps_and_mixing();
+    batch_mutes();
+    for (auto mode : {VolumeSmoothing::exponential, VolumeSmoothing::linear}) {
+      mute_controls(mode);
+      transport_mutes(mode);
+    }
     exponential_smoothing();
     transport_volumes(VolumeSmoothing::exponential);
     transport_volumes(VolumeSmoothing::linear);

@@ -3,6 +3,7 @@
 #include "playback/output/audio_output.hpp"
 
 #include <functional>
+#include <span>
 #include <string>
 
 namespace playset {
@@ -12,6 +13,7 @@ struct TrackSnapshot {
   TrackId id;
   std::string name;
   double volume;
+  bool muted = false;
 };
 
 struct TransportSnapshot {
@@ -36,6 +38,8 @@ public:
   void stop();
   void seek(double seconds);
   void set_track_volume(TrackId id, double volume);
+  void set_track_muted(TrackId id, bool muted);
+  void set_tracks_muted(std::span<const TrackId> ids, bool muted);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
   [[nodiscard]] TransportSnapshot snapshot();
 

@@ -53,7 +53,9 @@ void check_rate(std::uint32_t rate) {
   require(transport.snapshot().position_seconds == 0.5 &&
               transport.snapshot().status == TransportStatus::paused,
           "Native paused bank switch changed playback state");
-  transport.set_track_volume(0, 0);
+  transport.set_track_muted(0, true);
+  require(transport.tracks()[0].muted && transport.tracks()[0].volume == 0.5,
+          "Native paused mute lost its volume setting");
   transport.play();
   until([&] { return transport.snapshot().position_seconds > 0.5; });
   transport.pause();
