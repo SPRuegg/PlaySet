@@ -11,7 +11,7 @@ static_assert(std::atomic<unsigned>::is_always_lock_free);
 static_assert(std::atomic<std::int64_t>::is_always_lock_free);
 
 BufferedPlayback::BufferedPlayback(PreparedSong song, std::int64_t start_frame,
-                                   std::shared_ptr<TrackVolumes> volumes,
+                                   std::shared_ptr<MixerControls> volumes,
                                    VolumeSmoothing smoothing)
     : song_(std::move(song)), volumes_(std::move(volumes)) {
   for (auto &bank : banks_) bank = std::make_unique<Bank>(song_.stems.size());

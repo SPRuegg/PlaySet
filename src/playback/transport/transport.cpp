@@ -15,7 +15,7 @@ Transport::Transport(PreparedSong song, OutputFactory output, VolumeSmoothing sm
   }
   if (stems_.empty() || !std::isfinite(sample_rate_) || sample_rate_ <= 0)
     throw std::invalid_argument("Transport requires a prepared song.");
-  volumes_ = std::make_shared<TrackVolumes>(stems_.size());
+  volumes_ = std::make_shared<MixerControls>(stems_.size());
   playback_ = std::make_unique<BufferedPlayback>(std::move(song), 0, volumes_, smoothing);
   playback_->wait_until_ready();
   output_ = output(*playback_, sample_rate_);

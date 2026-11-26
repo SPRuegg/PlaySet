@@ -19,7 +19,7 @@ void ramps_and_mixing() {
   block.frames = playback_block_frames;
   std::fill(block.track(0).begin(), block.track(0).end(), 0.25F);
   std::fill(block.track(1).begin(), block.track(1).end(), 0.5F);
-  TrackVolumes volumes(2);
+  MixerControls volumes(2);
   require(volumes.get(0) == 1 && volumes.get(1) == 1, "Tracks must default to original level");
   volumes.set(0, 0);
   volumes.set(1, 0.5);
@@ -145,7 +145,7 @@ void transport_volumes(VolumeSmoothing mode) {
           tracks[0].volume == 0 && tracks[1].volume == 1, "Track identities or levels changed");
 }
 void mute_controls(VolumeSmoothing mode) {
-  TrackVolumes volumes(2);
+  MixerControls volumes(2);
   require(!volumes.is_muted(0) && !volumes.is_muted(1), "Tracks must load unmuted");
   volumes.set(0, 0.5);
   VolumeSmoother smoother(volumes, 48000, mode);
@@ -186,7 +186,7 @@ void mute_controls(VolumeSmoothing mode) {
 }
 
 void batch_mutes() {
-  TrackVolumes volumes(3);
+  MixerControls volumes(3);
   const std::array<TrackId, 2> selected{0, 2};
   volumes.set_muted(selected, true);
   require(volumes.is_muted(0) && !volumes.is_muted(1) && volumes.is_muted(2),
@@ -201,7 +201,7 @@ void batch_mutes() {
   volumes.set_muted(duplicates, false);
   require(!volumes.is_muted(0) && !volumes.is_muted(2), "Batch unmute failed");
 
-  TrackVolumes grouped(maximum_tracks);
+  MixerControls grouped(maximum_tracks);
   std::array<TrackId, maximum_tracks> ids{};
   for (TrackId id = 0; id < ids.size(); ++id) ids[id] = id;
   VolumeSmoother smoother(grouped, 48000);
@@ -265,7 +265,7 @@ void transport_mutes(VolumeSmoothing mode) {
 }
 
 void solo_controls(VolumeSmoothing mode) {
-  TrackVolumes volumes(3);
+  MixerControls volumes(3);
   VolumeSmoother smoother(volumes, 48000, mode);
   require(!volumes.is_solo(0), "Tracks must start without solo");
   smoother.begin_render();
@@ -372,7 +372,7 @@ void transport_solos(VolumeSmoothing mode) {
 }
 
 void coherent_solos() {
-  TrackVolumes volumes(2);
+  MixerControls volumes(2);
   volumes.set_solo(0, true);
   VolumeSmoother smoother(volumes, 48000);
   smoother.settle();
@@ -391,7 +391,7 @@ void coherent_solos() {
 
 void exponential_smoothing() {
   for (const auto rate : {44100.0, 48000.0, 192000.0}) {
-    TrackVolumes volumes(1);
+    MixerControls volumes(1);
     VolumeSmoother smoother(volumes, rate);
     smoother.begin_render();
     require(smoother.next_frame()[0] == 1, "Initial volume must not fade in");
@@ -428,7 +428,7 @@ void exponential_smoothing() {
   }
 }
 void concurrent_targets() {
-  TrackVolumes volumes(maximum_tracks);
+  MixerControls volumes(maximum_tracks);
   VolumeSmoother ramp(volumes, 192000);
   std::jthread writer([&] {
     for (std::size_t i = 0; i < 20000; ++i) {
@@ -444,7 +444,7 @@ void concurrent_targets() {
   }
 }
 void coherent_batches() {
-  TrackVolumes volumes(maximum_tracks);
+  MixerControls volumes(maximum_tracks);
   VolumeSmoother smoother(volumes, 48000);
   std::array<double, maximum_tracks> batch{};
   batch.fill(0.25);

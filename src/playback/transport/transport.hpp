@@ -50,7 +50,7 @@ private:
   std::vector<StemInfo> stems_;
   double sample_rate_;
   std::int64_t total_frames_ = 0;
-  std::shared_ptr<TrackVolumes> volumes_;
+  std::shared_ptr<MixerControls> volumes_;
   std::unique_ptr<BufferedPlayback> playback_;
   std::unique_ptr<PlaybackOutput> output_;
   TransportStatus status_ = TransportStatus::stopped;

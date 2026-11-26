@@ -26,11 +26,13 @@ std::uint64_t mix_stem_block(const StemBlock &block, std::size_t first_frame,
 
 The size of `output` determines how much audio to mix. Because each stereo frame has a left and right sample, a buffer with room for 200 samples requests 100 frames. There must be enough valid audio left in the block to fill that request.
 
-If you provide a `VolumeSmoother`, the function uses it to adjust each track's volume as it mixes. Both channels receive the same adjustment, keeping the stereo balance unchanged. Without a smoother, every track stays at its original level.
+If you provide a `VolumeSmoother`, the function uses it to adjust each track's volume as it mixes, then applies the master volume and mute to the combined signal. Both channels receive the same adjustment, keeping the stereo balance unchanged. Without a smoother, every track and the master stay at their original levels.
 
 The smoother must cover the same number of tracks as the block. Call its `begin_render()` before mixing so it can pick up the requested volume levels.
 
-The function adds the tracks together using `double` values for extra precision, then stores the result as `float` samples. It waits until all tracks have been added before limiting the output to the range from `-1` to `1`. That way, tracks can balance each other out before anything is clipped.
+The function adds the tracks together using `double` values for extra precision, then stores the result as `float` samples. It waits until all tracks have been added and the master multiplier has been applied before limiting the output to the range from `-1` to `1`. That way, tracks can balance each other out before anything is clipped.
+
+For example, two tracks that add up to `1.5` become `0.75` at a master volume of `0.5`. That sample does not clip. A settled master mute produces silence and adds nothing to the clipping count.
 
 If a combined sample falls outside that range, it is clipped to the nearest limit. For example, `1.2` becomes `1`. The function returns how many samples needed this adjustment. Left and right count separately, so clipping both channels in one frame adds two to the count. A sample already at either limit needs no adjustment and is not counted.
 

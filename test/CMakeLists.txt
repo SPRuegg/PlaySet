@@ -58,6 +58,13 @@ target_compile_options(volume_test PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME playback.volume COMMAND volume_test)
 set_tests_properties(playback.volume PROPERTIES TIMEOUT 30)
 
+add_executable(master_mixing_test master_mixing_test.cpp)
+target_link_libraries(master_mixing_test PRIVATE PlaySet::Playback)
+set_target_properties(master_mixing_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(master_mixing_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME playback.master_mixing COMMAND master_mixing_test)
+set_tests_properties(playback.master_mixing PROPERTIES TIMEOUT 30)
+
 option(PLAYSET_TEST_AUDIO_OUTPUT "Test the native output device with its volume forced to zero" OFF)
 if(PLAYSET_TEST_AUDIO_OUTPUT)
   add_executable(native_output_test native_output_test.cpp
