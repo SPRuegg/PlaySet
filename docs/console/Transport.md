@@ -12,6 +12,8 @@ After building the app, run:
 
 Replace the path with your stem folder. The song loads stopped, so you can adjust its settings before calling `play`. Audio uses your default output device when playback starts.
 
+If you only want to check the stems without starting a transport, use `--inspect` with the same folder. These are the two supported launch modes. Running the app without arguments prints `Hello PlaySet!` and exits.
+
 Enter `help` whenever you want to see the available commands. Enter one command per line; blank lines are ignored.
 
 ## Commands
@@ -107,4 +109,27 @@ Volume must be between `0` and `1`, and seek positions must be within the song. 
 
 ## Testing
 
-The console tests send commands through standard input and check the displayed track settings, transport state, and errors. They use silent output, so you can run them without opening an audio device.
+The console tests send commands through standard input and check the displayed track settings, transport state, and errors. Direct module tests also check that errors use their own output stream, commands continue after a rejected request, and quitting leaves later input unread. Both use silent output, so you can run them without opening an audio device.
+
+## Calling the console from code
+
+Declared in `src/console/transport_console.hpp` and implemented in `src/console/transport_console.cpp`:
+
+```cpp
+void run_transport_console(Transport &transport, std::istream &commands,
+                           std::ostream &output, std::ostream &errors);
+```
+
+You supply a loaded transport, a stream to read commands from, and two streams for normal output and errors. For a terminal session, call:
+
+```cpp
+playset::run_transport_console(transport, std::cin, std::cout, std::cerr);
+```
+
+You can supply string streams instead when you want to send a prepared sequence of commands and inspect the replies in a test. The console uses the streams you pass; it does not read from or write to the terminal directly.
+
+The function prints help, reads one command at a time, and returns when you enter `quit` or reach the end of the input. A rejected command writes an error and lets you continue. Other commands report the current transport status, except `help`, which prints the command list.
+
+Your transport stays owned by the caller. Returning from the console does not reset its settings or stop playback. Keep both the transport and streams alive throughout the call, and run it on the transport's control thread.
+
+`main.cpp` handles startup arguments, loads the stems, and creates the transport before calling the console. The console handles command parsing and display; the playback modules handle audio, validation of track settings, and smoothing. The `PlaySet::Console` build target depends on `PlaySet::Playback`, so playback can also be used without the console.

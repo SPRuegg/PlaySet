@@ -25,6 +25,21 @@ def main():
             with wave.open(str(folder / f"{name}.wav"), "wb") as stem:
                 stem.setparams((1, 2, 48000, 0, "NONE", "not compressed"))
                 stem.writeframes(b"\x00\x20" * 48000)
+        rejected = subprocess.run(
+            [sys.argv[1], "--play", str(folder)], capture_output=True, text=True,
+            timeout=10,
+        )
+        require(rejected.returncode == 1, "Removed playback command was accepted")
+        require(not rejected.stdout, "Removed command loaded stems before rejection")
+        require(rejected.stderr == "Usage: PlaySet --inspect|--transport <stem-folder>\n",
+                "Usage still advertises the removed command")
+        inspected = subprocess.run(
+            [sys.argv[1], "--inspect", str(folder)], capture_output=True, text=True,
+            timeout=10, check=True,
+        )
+        require(not inspected.stderr and "Prepared 2 stems" in inspected.stdout,
+                "Stem inspection failed")
+        require("Commands:" not in inspected.stdout, "Inspection opened the console")
         commands = (
             "\nhelp\nvolume 0 0.5\nmute 0 on\nmutes 0 1 on\nmute 0 off\n"
             "solo 0 on\nsoli 1 on\nsolo 0 off\nplay\npause\nseek 0.25\n"

@@ -9,7 +9,6 @@
 #include <exception>
 #include <stdexcept>
 #include <string>
-#include <utility>
 
 namespace playset {
 namespace {
@@ -210,27 +209,6 @@ private:
 std::unique_ptr<PlaybackOutput> make_audio_output(BufferedPlayback &playback,
                                                  double sample_rate) {
   return std::make_unique<MacAudioOutput>(playback, sample_rate);
-}
-
-PlaybackReport play_song(PreparedSong song) {
-  const auto rate = song.sample_rate;
-  BufferedPlayback playback(std::move(song));
-  playback.wait_until_ready();
-  auto output = make_audio_output(playback, rate);
-  output->play();
-  auto last_frame = output->position_frames();
-  auto last_activity = std::chrono::steady_clock::now();
-  while (!output->finished()) {
-    const auto frame = output->position_frames();
-    if (frame != last_frame) {
-      last_frame = frame;
-      last_activity = std::chrono::steady_clock::now();
-    } else if (std::chrono::steady_clock::now() - last_activity > output_timeout) {
-      throw std::runtime_error("Audio output stopped responding.");
-    }
-    std::this_thread::sleep_for(2ms);
-  }
-  return playback.report();
 }
 
 } // namespace playset

@@ -71,9 +71,16 @@ if(PLAYSET_TEST_AUDIO_OUTPUT)
 endif()
 
 add_executable(transport_console_driver "${PROJECT_SOURCE_DIR}/main.cpp" console_audio_output.cpp)
-target_link_libraries(transport_console_driver PRIVATE PlaySet::Playback)
+target_link_libraries(transport_console_driver PRIVATE PlaySet::Console)
 set_target_properties(transport_console_driver PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(transport_console_driver PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME playback.console COMMAND "${Python3_EXECUTABLE}"
   "${CMAKE_CURRENT_SOURCE_DIR}/transport_console_test.py" "$<TARGET_FILE:transport_console_driver>")
 set_tests_properties(playback.console PROPERTIES TIMEOUT 30)
+
+add_executable(transport_console_test transport_console_test.cpp console_audio_output.cpp)
+target_link_libraries(transport_console_test PRIVATE PlaySet::Console)
+set_target_properties(transport_console_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(transport_console_test PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME console.transport COMMAND transport_console_test)
+set_tests_properties(console.transport PROPERTIES TIMEOUT 30)
