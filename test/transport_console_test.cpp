@@ -40,6 +40,19 @@ int main() {
     require(remaining == "volume 0 1", "Quit consumed commands beyond its own line");
     require(next_output.str().find("Commands:") != std::string::npos,
             "Second invocation did not write help to its supplied output");
+
+    std::istringstream master_commands(
+        "master-volume 0\nmaster-mute on\nmaster-volume 1\nmaster-volume 0.25\n"
+        "master-mute off\nmaster-mute off\nstatus\nquit\n");
+    std::ostringstream master_output, master_errors;
+    playset::run_transport_console(transport, master_commands, master_output, master_errors);
+    const auto master = transport.snapshot();
+    require(master_errors.str().empty() && master.master_volume == 0.25 && !master.master_muted,
+            "Master commands failed or toggled instead of setting a state");
+    require(master_output.str().find("master-volume=0.25 master-mute=off") != std::string::npos,
+            "Status omitted requested master settings");
+    require(transport.tracks()[0].volume == 0.5 && !transport.tracks()[0].muted,
+            "Master console commands changed track settings");
   } catch (const std::exception &error) {
     std::cerr << error.what() << '\n';
     return 1;

@@ -1,6 +1,6 @@
 # Transport console
 
-The transport console lets you try playback and mixer controls by typing commands. You can inspect track IDs, change volumes, mute selected tracks, and compare exclusive Solo with additive Soli.
+The transport console lets you try playback and mixer controls by typing commands. You can inspect track IDs, change track and master volumes, mute individual tracks or the whole mix, and compare exclusive Solo with additive Soli.
 
 ## Opening the console
 
@@ -26,11 +26,13 @@ Enter `help` whenever you want to see the available commands. Enter one command 
 | `mutes <id>... <on\|off>` | Mute or unmute several selected tracks together. |
 | `solo <id> <on\|off>` | Enable exclusive Solo, or disable that track's solo. |
 | `soli <id>... <on\|off>` | Add tracks to the solo selection, or remove the named tracks. |
+| `master-volume <0..1>` | Set the requested volume of the combined output. |
+| `master-mute <on\|off>` | Mute or unmute the whole mix without changing its stored volume. |
 | `play` | Start or resume playback. At the end, start again from the beginning. |
 | `pause` | Silence playback while keeping your position. |
 | `stop` | Silence playback and return to the beginning. |
 | `seek <seconds>` | Move to a position without changing whether playback should be audible. |
-| `status` | See the current status, position, and duration. |
+| `status` | See the current status, position, duration, and requested master settings. |
 | `help` | Show the command list again. |
 | `quit` | Leave the console and release the loaded song and output. |
 
@@ -99,13 +101,36 @@ status
 
 Your position should stay unchanged. When you resume with `play`, those tracks should already be muted. Live changes use the selected smoothing mode; paused changes settle before audio resumes.
 
+### Controlling the whole mix
+
+Each loaded song starts with master volume `1` and master mute off. To lower the whole mix, mute it, and change its stored volume while silent, enter:
+
+```text
+master-volume 0.5
+master-mute on
+master-volume 0.25
+status
+```
+
+For a stopped song at the beginning, you might see:
+
+```text
+stopped: 0 / 240 seconds; master-volume=0.25 master-mute=on
+```
+
+Enter `master-mute off` to unmute using `0.25`. These commands leave individual track volumes, mute flags, and solo selections unchanged. The master affects every track, including soloed tracks, before final output clipping.
+
+Live master changes are smoothed. If you change the settings while paused, playback uses them immediately when you resume. Pause, Stop, Seek, and replay keep your master settings.
+
+The status line shows your requested settings, rather than the current signal level or progress through a fade. It appears after each successful command except `help` and `quit`.
+
 ## Invalid input
 
 If you enter an invalid command, the console prints an error and lets you try again. Missing values, unexpected extra arguments, invalid IDs, and states other than `on` or `off` are rejected.
 
 Batch commands accept 1 through 256 IDs. For example, if track `99` does not exist, `mutes 0 99 on` rejects the entire selection without muting track `0`. The same rule applies to Soli. Repeated IDs have the same effect as listing each track once.
 
-Volume must be between `0` and `1`, and seek positions must be within the song. You can enter `tracks` or `status` after an error to check that your settings stayed unchanged.
+Track and master volumes must be finite and between `0` and `1`, and seek positions must be within the song. For example, `master-volume 1.2`, `master-volume 0.5 extra`, and `master-mute maybe` are rejected without changing your settings. You can enter `tracks` or `status` after an error to check that your settings stayed unchanged.
 
 ## Testing
 
