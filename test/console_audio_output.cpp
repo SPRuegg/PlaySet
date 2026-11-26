@@ -27,7 +27,4 @@ private:
 std::unique_ptr<PlaybackOutput> make_audio_output(BufferedPlayback &playback, double) {
   return std::make_unique<SilentOutput>(playback);
 }
-PlaybackReport play_song(PreparedSong) {
-  throw std::runtime_error("The console test driver does not play audio.");
-}
 }

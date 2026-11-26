@@ -20,6 +20,4 @@ public:
 [[nodiscard]] std::unique_ptr<PlaybackOutput>
 make_audio_output(BufferedPlayback &playback, double sample_rate);
 
-[[nodiscard]] PlaybackReport play_song(PreparedSong song);
-
 } // namespace playset

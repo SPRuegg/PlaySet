@@ -12,8 +12,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     const auto command = std::string_view(argv[1]);
-    if (argc != 3 || (command != "--inspect" && command != "--play" && command != "--transport")) {
-        std::cerr << "Usage: PlaySet --inspect|--play|--transport <stem-folder>\n";
+    if (argc != 3 || (command != "--inspect" && command != "--transport")) {
+        std::cerr << "Usage: PlaySet --inspect|--transport <stem-folder>\n";
         return 1;
     }
     try {
@@ -28,11 +28,6 @@ int main(int argc, char* argv[]) {
         if (command == "--transport") {
             playset::Transport transport(std::move(song));
             playset::run_transport_console(transport, std::cin, std::cout, std::cerr);
-        } else if (command == "--play") {
-            std::cout << "Playing through the default audio output..." << std::endl;
-            const auto report = playset::play_song(std::move(song));
-            std::cout << "Finished: " << report.rendered_frames << " rendered source frames; " << report.clipped_samples
-                      << " clipped samples; " << report.underruns << " buffer underruns.\n";
         }
     } catch (const std::exception& error) {
         std::cerr << "PlaySet: " << error.what() << '\n';
