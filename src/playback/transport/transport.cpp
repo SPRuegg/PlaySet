@@ -29,7 +29,8 @@ TransportSnapshot Transport::snapshot() {
   const auto frame = status_ == TransportStatus::ended ? total_frames_ :
       std::min(total_frames_, output_->position_frames());
   return {status_, static_cast<double>(frame) / sample_rate_,
-          static_cast<double>(total_frames_) / sample_rate_};
+          static_cast<double>(total_frames_) / sample_rate_,
+          volumes_->master_volume(), volumes_->master_muted()};
 }
 
 void Transport::play() {
@@ -94,6 +95,13 @@ void Transport::set_track_solo(TrackId id, bool enabled) {
 }
 void Transport::set_tracks_soli(std::span<const TrackId> ids, bool enabled) {
   volumes_->set_soli(ids, enabled);
+}
+
+void Transport::set_master_volume(double volume) {
+  volumes_->set_master_volume(volume);
+}
+void Transport::set_master_muted(bool muted) {
+  volumes_->set_master_muted(muted);
 }
 
 } // namespace playset

@@ -21,6 +21,8 @@ struct TransportSnapshot {
   TransportStatus status;
   double position_seconds;
   double duration_seconds;
+  double master_volume = 1;
+  bool master_muted = false;
 };
 
 // All methods belong to one control thread; audio rendering remains independent.
@@ -43,6 +45,8 @@ public:
   void set_tracks_muted(std::span<const TrackId> ids, bool muted);
   void set_track_solo(TrackId id, bool enabled);
   void set_tracks_soli(std::span<const TrackId> ids, bool enabled);
+  void set_master_volume(double volume);
+  void set_master_muted(bool muted);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
   [[nodiscard]] TransportSnapshot snapshot();
 
