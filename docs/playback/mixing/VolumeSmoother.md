@@ -49,6 +49,8 @@ On later calls, a changed target starts a gradual transition from the current le
 
 If playback has too little buffered audio for a full callback, it outputs silence without calling `next_frame()`. The smoother can pick up new targets, but its frame-by-frame progress continues only when source audio resumes. See [Underruns](../buffering/Underruns.md).
 
+A muted track uses a target of `0`, while its requested volume stays stored in `TrackVolumes`. When you unmute it, the smoother approaches that saved volume. If any tracks are soloed, unselected tracks also target zero. A muted track stays silent even when soloed. Solo, mute, and volume are read together under the same revision check.
+
 ### Advancing one frame
 
 ```cpp
