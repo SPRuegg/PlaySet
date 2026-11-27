@@ -4,7 +4,7 @@
 
 ## Definition
 
-Declared in `src/playback/loading/stem_loader.hpp`:
+Declared in `src/audio/loading/stem_loader.hpp`:
 
 ```cpp
 class StemReader {
@@ -158,7 +158,7 @@ explicit StemReader(std::unique_ptr<Impl> impl);
 std::unique_ptr<Impl> impl_;
 ```
 
-`Impl` holds the details needed to read the file: the decoder, source information, a small audio buffer, and the current position within that buffer. These details are defined in `src/playback/loading/macos/stem_reader.cpp`, keeping Apple's audio types out of the public header.
+`Impl` holds the details needed to read the file: the decoder, source information, a small audio buffer, and the current position within that buffer. These details are defined in `src/audio/loading/macos/stem_reader.cpp`, keeping Apple's audio types out of the public header.
 
 `impl_` owns those details through `std::unique_ptr`, which ensures they belong to one reader and are cleaned up automatically.
 
@@ -175,7 +175,7 @@ Opening checks the first chunk of audio, rather than scanning the entire file. A
 ## Example
 
 ```cpp
-#include "playback/loading/stem_loader.hpp"
+#include "audio/loading/stem_loader.hpp"
 
 #include <array>
 

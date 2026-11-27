@@ -1,4 +1,4 @@
-#include "playback/loading/stem_loader.hpp"
+#include "audio/loading/stem_loader.hpp"
 
 #include <AudioToolbox/AudioToolbox.h>
 #include <CoreFoundation/CoreFoundation.h>
