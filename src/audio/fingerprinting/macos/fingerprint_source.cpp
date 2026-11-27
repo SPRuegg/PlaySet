@@ -34,6 +34,12 @@ FingerprintSource::FingerprintSource(const std::filesystem::path &path)
 }
 FingerprintSource::~FingerprintSource() { ::close(descriptor_); }
 
+void FingerprintSourceVersion::verify_unchanged() const {
+  struct stat current{};
+  if (::stat(path.c_str(), &current) != 0 || !same_version(attributes, current))
+    throw std::runtime_error("Source audio changed during fingerprinting: " + path.string());
+}
+
 void FingerprintSource::verify_unchanged() const {
   struct stat opened{}, current{};
   if (::fstat(descriptor_, &opened) != 0 || ::stat(path_.c_str(), &current) != 0 ||

@@ -5,6 +5,12 @@
 
 namespace playset::detail {
 
+struct FingerprintSourceVersion {
+  std::filesystem::path path;
+  struct stat attributes{};
+  void verify_unchanged() const;
+};
+
 class FingerprintSource {
 public:
   explicit FingerprintSource(const std::filesystem::path &path);
@@ -12,6 +18,7 @@ public:
   FingerprintSource(const FingerprintSource &) = delete;
   FingerprintSource &operator=(const FingerprintSource &) = delete;
   [[nodiscard]] const std::filesystem::path &path() const noexcept { return path_; }
+  [[nodiscard]] FingerprintSourceVersion version() const { return {path_, initial_}; }
   void verify_unchanged() const;
 
 private:

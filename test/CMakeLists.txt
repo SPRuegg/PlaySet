@@ -62,6 +62,20 @@ foreach(case IN ITEMS pcm compressed failures)
   set_tests_properties(fingerprints.${case} PROPERTIES TIMEOUT 30)
 endforeach()
 
+add_executable(stem_collection_test stem_collection_test.cpp)
+add_dependencies(stem_collection_test fingerprint_test_fixtures playset_test_fixtures)
+target_link_libraries(stem_collection_test PRIVATE PlaySet::Audio)
+set_target_properties(stem_collection_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(stem_collection_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS identity exclusions failures limits compressed)
+  add_test(NAME fingerprints.collection_${case} COMMAND stem_collection_test "${case}" "${FINGERPRINT_FIXTURES}")
+  set_tests_properties(fingerprints.collection_${case} PROPERTIES TIMEOUT 30)
+endforeach()
+
+add_test(NAME fingerprints.collection_short_compressed
+  COMMAND stem_collection_test compressed "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
+set_tests_properties(fingerprints.collection_short_compressed PROPERTIES TIMEOUT 30)
+
 add_executable(playback_test playback_test.cpp)
 add_dependencies(playback_test playset_test_fixtures)
 target_link_libraries(playback_test PRIVATE PlaySet::Playback)

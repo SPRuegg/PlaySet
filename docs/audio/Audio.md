@@ -36,3 +36,5 @@ The loading tests link directly to `PlaySet::Audio`, so they exercise the source
 ## Fingerprinting a source
 
 Use [fingerprint_stem()](fingerprinting/StemFingerprint.md) when you want a versioned fingerprint for one source file. It samples short portions of WAV audio or encoded M4A packets with its own file resources, without starting playback or changing another reader's position.
+
+For several sources, use [fingerprint_stems() and verify_stems()](fingerprinting/StemCollection.md). They identify the included stems together, keep individual source associations, and exclude named click and guide references from collection identity.
