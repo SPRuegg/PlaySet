@@ -31,7 +31,7 @@ def main():
         )
         require(rejected.returncode == 1, "Removed playback command was accepted")
         require(not rejected.stdout, "Removed command loaded stems before rejection")
-        require(rejected.stderr == "Usage: PlaySet --inspect|--transport <stem-folder>\n",
+        require(rejected.stderr == "Usage: PlaySet --inspect|--transport|--fingerprint <stem-folder>\n",
                 "Usage still advertises the removed command")
         inspected = subprocess.run(
             [sys.argv[1], "--inspect", str(folder)], capture_output=True, text=True,

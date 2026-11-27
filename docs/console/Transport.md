@@ -12,7 +12,7 @@ After building the app, run:
 
 Replace the path with your stem folder. The song loads stopped, so you can adjust its settings before calling `play`. Audio uses your default output device when playback starts.
 
-If you only want to check the stems without starting a transport, use `--inspect` with the same folder. These are the two supported launch modes. Running the app without arguments prints `Hello PlaySet!` and exits.
+If you only want to check the stems without starting a transport, use `--inspect` with the same folder. To calculate their fingerprints, use [--fingerprint](Fingerprinting.md). Running the app without arguments prints `Hello PlaySet!` and exits.
 
 Enter `help` whenever you want to see the available commands. Enter one command per line; blank lines are ignored.
 

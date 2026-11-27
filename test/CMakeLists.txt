@@ -124,6 +124,11 @@ add_executable(transport_console_driver "${PROJECT_SOURCE_DIR}/main.cpp" console
 target_link_libraries(transport_console_driver PRIVATE PlaySet::Console)
 set_target_properties(transport_console_driver PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(transport_console_driver PRIVATE -Wall -Wextra -Wpedantic)
+add_dependencies(transport_console_driver fingerprint_test_fixtures)
+add_test(NAME console.fingerprints COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/fingerprint_console_test.py"
+  "$<TARGET_FILE:transport_console_driver>" "${FINGERPRINT_FIXTURES}")
+set_tests_properties(console.fingerprints PROPERTIES TIMEOUT 30)
 add_test(NAME playback.console COMMAND "${Python3_EXECUTABLE}"
   "${CMAKE_CURRENT_SOURCE_DIR}/transport_console_test.py" "$<TARGET_FILE:transport_console_driver>")
 set_tests_properties(playback.console PROPERTIES TIMEOUT 30)
