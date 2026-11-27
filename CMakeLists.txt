@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.25)
 
 project(PlaySet LANGUAGES CXX)
 
+add_subdirectory(src/audio)
 add_subdirectory(src/playback)
 add_subdirectory(src/console)
 

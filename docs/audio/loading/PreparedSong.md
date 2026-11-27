@@ -4,7 +4,7 @@
 
 ## Definition
 
-Declared in `src/playback/loading/stem_loader.hpp`:
+Declared in `src/audio/loading/stem_loader.hpp`:
 
 ```cpp
 struct PreparedSong {

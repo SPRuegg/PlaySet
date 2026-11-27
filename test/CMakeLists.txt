@@ -22,7 +22,7 @@ add_custom_target(playset_test_fixtures DEPENDS "${M4A_FIXTURE}" "${ALAC_FIXTURE
 
 add_executable(stem_loader_test stem_loader_test.cpp)
 add_dependencies(stem_loader_test playset_test_fixtures)
-target_link_libraries(stem_loader_test PRIVATE PlaySet::Playback)
+target_link_libraries(stem_loader_test PRIVATE PlaySet::Audio)
 set_target_properties(stem_loader_test PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(stem_loader_test PRIVATE -Wall -Wextra -Wpedantic)
 foreach(case IN ITEMS pcm sample_rates m4a invalid)
