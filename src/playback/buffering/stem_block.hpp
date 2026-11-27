@@ -1,6 +1,6 @@
 #pragma once
 
-#include "playback/loading/stem_loader.hpp"
+#include "audio/loading/stem_loader.hpp"
 #include "playback/mixing/mixer_controls.hpp"
 
 #include <cstdint>
