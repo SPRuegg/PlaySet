@@ -5,6 +5,10 @@ endif()
 add_library(playset_audio STATIC
   loading/stem_loader.cpp
   loading/macos/stem_reader.cpp
+  fingerprinting/stem_fingerprint.cpp
+  fingerprinting/macos/m4a_packets.cpp
+  fingerprinting/macos/sha256.cpp
+  fingerprinting/macos/fingerprint_source.cpp
 )
 add_library(PlaySet::Audio ALIAS playset_audio)
 target_include_directories(playset_audio PUBLIC "${PROJECT_SOURCE_DIR}/src")
