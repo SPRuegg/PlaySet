@@ -33,6 +33,49 @@ endforeach()
 add_test(NAME stems.alac COMMAND stem_loader_test m4a "${ALAC_FIXTURE}")
 set_tests_properties(stems.alac PROPERTIES TIMEOUT 15)
 
+set(FINGERPRINT_FIXTURES "${CMAKE_CURRENT_BINARY_DIR}/fixtures/fingerprint")
+add_custom_command(
+  OUTPUT "${FINGERPRINT_FIXTURES}/tone.m4a" "${FINGERPRINT_FIXTURES}/tone-alac.m4a"
+    "${FINGERPRINT_FIXTURES}/tone.wav"
+    "${FINGERPRINT_FIXTURES}/changed/tone.m4a" "${FINGERPRINT_FIXTURES}/changed/tone-alac.m4a"
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_m4a_fixture.py"
+    --afconvert "${AFCONVERT_EXECUTABLE}" --output-dir "${FINGERPRINT_FIXTURES}"
+    --frames 441000 --keep-source
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/generate_m4a_fixture.py"
+    --afconvert "${AFCONVERT_EXECUTABLE}" --output-dir "${FINGERPRINT_FIXTURES}/changed"
+    --frames 441000 --frequency 880
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/generate_m4a_fixture.py" "${AFCONVERT_EXECUTABLE}"
+  COMMENT "Generating compressed audio fingerprint fixtures"
+  VERBATIM
+)
+add_custom_target(fingerprint_test_fixtures DEPENDS
+  "${FINGERPRINT_FIXTURES}/tone.m4a" "${FINGERPRINT_FIXTURES}/tone-alac.m4a"
+  "${FINGERPRINT_FIXTURES}/tone.wav"
+  "${FINGERPRINT_FIXTURES}/changed/tone.m4a" "${FINGERPRINT_FIXTURES}/changed/tone-alac.m4a")
+add_executable(stem_fingerprint_test stem_fingerprint_test.cpp)
+add_dependencies(stem_fingerprint_test fingerprint_test_fixtures)
+target_link_libraries(stem_fingerprint_test PRIVATE PlaySet::Audio)
+set_target_properties(stem_fingerprint_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(stem_fingerprint_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS pcm compressed failures)
+  add_test(NAME fingerprints.${case} COMMAND stem_fingerprint_test "${case}" "${FINGERPRINT_FIXTURES}")
+  set_tests_properties(fingerprints.${case} PROPERTIES TIMEOUT 30)
+endforeach()
+
+add_executable(stem_collection_test stem_collection_test.cpp)
+add_dependencies(stem_collection_test fingerprint_test_fixtures playset_test_fixtures)
+target_link_libraries(stem_collection_test PRIVATE PlaySet::Audio)
+set_target_properties(stem_collection_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(stem_collection_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS identity exclusions failures limits compressed)
+  add_test(NAME fingerprints.collection_${case} COMMAND stem_collection_test "${case}" "${FINGERPRINT_FIXTURES}")
+  set_tests_properties(fingerprints.collection_${case} PROPERTIES TIMEOUT 30)
+endforeach()
+
+add_test(NAME fingerprints.collection_short_compressed
+  COMMAND stem_collection_test compressed "${CMAKE_CURRENT_BINARY_DIR}/fixtures")
+set_tests_properties(fingerprints.collection_short_compressed PROPERTIES TIMEOUT 30)
+
 add_executable(playback_test playback_test.cpp)
 add_dependencies(playback_test playset_test_fixtures)
 target_link_libraries(playback_test PRIVATE PlaySet::Playback)
@@ -81,6 +124,11 @@ add_executable(transport_console_driver "${PROJECT_SOURCE_DIR}/main.cpp" console
 target_link_libraries(transport_console_driver PRIVATE PlaySet::Console)
 set_target_properties(transport_console_driver PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(transport_console_driver PRIVATE -Wall -Wextra -Wpedantic)
+add_dependencies(transport_console_driver fingerprint_test_fixtures)
+add_test(NAME console.fingerprints COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/fingerprint_console_test.py"
+  "$<TARGET_FILE:transport_console_driver>" "${FINGERPRINT_FIXTURES}")
+set_tests_properties(console.fingerprints PROPERTIES TIMEOUT 30)
 add_test(NAME playback.console COMMAND "${Python3_EXECUTABLE}"
   "${CMAKE_CURRENT_SOURCE_DIR}/transport_console_test.py" "$<TARGET_FILE:transport_console_driver>")
 set_tests_properties(playback.console PROPERTIES TIMEOUT 30)

@@ -1,3 +1,4 @@
+#include "console/fingerprint_console.hpp"
 #include "console/transport_console.hpp"
 #include "playback/transport/transport.hpp"
 
@@ -12,11 +13,15 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     const auto command = std::string_view(argv[1]);
-    if (argc != 3 || (command != "--inspect" && command != "--transport")) {
-        std::cerr << "Usage: PlaySet --inspect|--transport <stem-folder>\n";
+    if (argc != 3 || (command != "--inspect" && command != "--transport" && command != "--fingerprint")) {
+        std::cerr << "Usage: PlaySet --inspect|--transport|--fingerprint <stem-folder>\n";
         return 1;
     }
     try {
+        if (command == "--fingerprint") {
+            playset::inspect_stem_fingerprints(argv[2], std::cout);
+            return 0;
+        }
         auto song = playset::prepare_stems(argv[2]);
         std::cout << "Prepared " << song.stems.size() << " stems at " << song.sample_rate
                   << " Hz; duration " << song.duration_seconds << " seconds.\n";

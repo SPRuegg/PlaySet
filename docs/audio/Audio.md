@@ -32,3 +32,9 @@ auto song = playset::prepare_stems("/Tracks/Song/Stems");
 `PlaySet::Playback` uses this module for source loading and adds buffering, mixing, transport, and audio output. The audio module itself does not depend on playback or the console. Its macOS decoder uses AudioToolbox and CoreFoundation, with platform details kept in `src/audio/loading/macos`.
 
 The loading tests link directly to `PlaySet::Audio`, so they exercise the source readers without requiring playback components.
+
+## Fingerprinting a source
+
+Use [fingerprint_stem()](fingerprinting/StemFingerprint.md) when you want a versioned fingerprint for one source file. It samples short portions of WAV audio or encoded M4A packets with its own file resources, without starting playback or changing another reader's position.
+
+For several sources, use [fingerprint_stems() and verify_stems()](fingerprinting/StemCollection.md). They identify the included stems together, keep individual source associations, and exclude named click and guide references from collection identity.
