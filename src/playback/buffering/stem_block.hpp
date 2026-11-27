@@ -1,7 +1,7 @@
 #pragma once
 
 #include "playback/loading/stem_loader.hpp"
-#include "playback/mixing/track_volume.hpp"
+#include "playback/mixing/mixer_controls.hpp"
 
 #include <cstdint>
 #include <span>
@@ -27,7 +27,7 @@ private:
 
 std::size_t decode_stem_block(PreparedSong &song, StemBlock &block);
 
-// The final output boundary: sum with double precision, count overloads, then clamp.
+// Sum with double precision, apply master controls, count overloads, then clamp.
 std::uint64_t mix_stem_block(const StemBlock &block, std::size_t first_frame,
                              std::span<float> output, VolumeSmoother *volume = nullptr) noexcept;
 

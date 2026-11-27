@@ -15,7 +15,7 @@ Transport::Transport(PreparedSong song, OutputFactory output, VolumeSmoothing sm
   }
   if (stems_.empty() || !std::isfinite(sample_rate_) || sample_rate_ <= 0)
     throw std::invalid_argument("Transport requires a prepared song.");
-  volumes_ = std::make_shared<TrackVolumes>(stems_.size());
+  volumes_ = std::make_shared<MixerControls>(stems_.size());
   playback_ = std::make_unique<BufferedPlayback>(std::move(song), 0, volumes_, smoothing);
   playback_->wait_until_ready();
   output_ = output(*playback_, sample_rate_);
@@ -29,7 +29,8 @@ TransportSnapshot Transport::snapshot() {
   const auto frame = status_ == TransportStatus::ended ? total_frames_ :
       std::min(total_frames_, output_->position_frames());
   return {status_, static_cast<double>(frame) / sample_rate_,
-          static_cast<double>(total_frames_) / sample_rate_};
+          static_cast<double>(total_frames_) / sample_rate_,
+          volumes_->master_volume(), volumes_->master_muted()};
 }
 
 void Transport::play() {
@@ -94,6 +95,13 @@ void Transport::set_track_solo(TrackId id, bool enabled) {
 }
 void Transport::set_tracks_soli(std::span<const TrackId> ids, bool enabled) {
   volumes_->set_soli(ids, enabled);
+}
+
+void Transport::set_master_volume(double volume) {
+  volumes_->set_master_volume(volume);
+}
+void Transport::set_master_muted(bool muted) {
+  volumes_->set_master_muted(muted);
 }
 
 } // namespace playset

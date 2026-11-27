@@ -1,10 +1,10 @@
 # VolumeSmoothing
 
-`VolumeSmoothing` chooses how a track's volume approaches a new level. Gradual changes help avoid clicks caused by abrupt changes to the audio samples.
+`VolumeSmoothing` chooses how track and master volumes approach new levels. Gradual changes help avoid clicks caused by abrupt changes to the audio samples.
 
 ## Definition
 
-Declared in `src/playback/mixing/track_volume.hpp`:
+Declared in `src/playback/mixing/mixer_controls.hpp`:
 
 ```cpp
 enum class VolumeSmoothing { exponential, linear };
@@ -41,7 +41,7 @@ The mode is selected when constructing a `VolumeSmoother`. Its current interface
 
 ```cpp
 // Using exponential (default)
-playset::TrackVolumes volumes(2);
+playset::MixerControls volumes(2);
 
 // Using linear
 playset::VolumeSmoother default_smoothing(volumes, song.sample_rate);

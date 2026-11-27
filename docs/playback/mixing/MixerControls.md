@@ -1,21 +1,25 @@
-# TrackVolumes
+# MixerControls
 
-`TrackVolumes` stores the requested volume, mute state, and solo state for each track. Every track starts at its original level and can be turned down independently, all the way to silence.
+`MixerControls` stores your requested track settings and the master volume and mute state. You can adjust individual tracks or turn the whole mix down without losing those settings.
 
 ## Definition
 
-Declared in `src/playback/mixing/track_volume.hpp`:
+Declared in `src/playback/mixing/mixer_controls.hpp`:
 
 ```cpp
-class TrackVolumes {
+class MixerControls {
 public:
-  explicit TrackVolumes(std::size_t count);
+  explicit MixerControls(std::size_t count);
   void set(TrackId id, double volume);
   void set_all(std::span<const double> volumes);
   void set_muted(TrackId id, bool muted);
   void set_muted(std::span<const TrackId> ids, bool muted);
   void set_solo(TrackId id, bool enabled);
   void set_soli(std::span<const TrackId> ids, bool enabled);
+  void set_master_volume(double volume);
+  void set_master_muted(bool muted);
+  [[nodiscard]] double master_volume() const noexcept;
+  [[nodiscard]] bool master_muted() const noexcept;
   [[nodiscard]] double get(TrackId id) const;
   [[nodiscard]] bool is_muted(TrackId id) const;
   [[nodiscard]] bool is_solo(TrackId id) const;
@@ -30,16 +34,18 @@ private:
   std::array<std::atomic<double>, maximum_tracks> targets_{};
   std::array<std::atomic<bool>, maximum_tracks> muted_{};
   std::array<std::atomic<bool>, maximum_tracks> solo_{};
+  std::atomic<double> master_volume_{1};
+  std::atomic<bool> master_muted_{false};
 };
 ```
 
-Implemented in `src/playback/mixing/track_volume.cpp`.
+Implemented in `src/playback/mixing/mixer_controls.cpp`.
 
 ## Public declarations
 
 | Declaration | Purpose |
 | --- | --- |
-| `TrackVolumes(count)` | Creates volume controls for a fixed number of tracks, each starting at `1`. |
+| `MixerControls(count)` | Creates volume controls for a fixed number of tracks, each starting at `1`. |
 | `set(id, volume)` | Changes one track's requested volume. |
 | `set_all(volumes)` | Changes every track's requested volume as one batch, in track-ID order. |
 | `set_muted(id, muted)` | Mutes or unmutes a track without changing its requested volume. |
@@ -49,6 +55,10 @@ Implemented in `src/playback/mixing/track_volume.cpp`.
 | `is_solo(id)` | Returns whether the track is selected for solo. |
 | `is_muted(id)` | Returns whether the track is muted. |
 | `get(id)` | Returns one track's requested volume. |
+| `set_master_volume(volume)` | Changes the requested level of the combined output. |
+| `set_master_muted(muted)` | Mutes or unmutes the whole mix without changing its requested volume. |
+| `master_volume()` | Returns your requested master volume, even while muted. |
+| `master_muted()` | Returns whether you have requested master mute. |
 | `size()` | Returns the number of tracks without changing anything or throwing an exception. |
 
 ### Track IDs
@@ -62,7 +72,7 @@ inline constexpr std::size_t maximum_tracks = 256;
 
 A track ID is its index in this collection, starting at `0`. For three tracks, the valid IDs are `0`, `1`, and `2`.
 
-These are positions within the loaded song, rather than identifiers saved permanently with an audio file. `TrackVolumes` does not assign names or discover tracks; the caller keeps each ID matched to the correct track.
+These are positions within the loaded song, rather than identifiers saved permanently with an audio file. `MixerControls` does not assign names or discover tracks; the caller keeps each ID matched to the correct track.
 
 ### Volume values
 
@@ -113,11 +123,30 @@ Like mute, live solo changes use the selected smoothing mode. Paused edits settl
 
 `set_soli()` accepts 1 through 256 IDs. Empty or oversized selections throw `std::invalid_argument`. An invalid ID throws `std::out_of_range` before any solo flags change. Repeated IDs have the same effect as listing each track once.
 
+### Master controls
+
+The master starts at `1` with mute off. Call `set_master_volume(0.5)` to halve the amplitude of the combined signal, or pass `0` for silence. Playback applies this adjustment after combining the tracks and before clipping the final output. Every track is affected, including soloed tracks.
+
+Call `set_master_muted(true)` to silence the whole mix without changing your requested master volume. You can still adjust that volume while muted. Passing `false` unmutes the mix at the latest requested level.
+
+For example, with a `MixerControls` instance named `volumes`:
+
+```cpp
+volumes.set_master_volume(0.5);
+volumes.set_master_muted(true);
+volumes.set_master_volume(0.25);
+volumes.set_master_muted(false);
+```
+
+Here, unmuting uses `0.25`. Individual track volumes, mute flags, and solo selections stay as you left them. Live changes follow the selected smoothing mode; the audio consumer can call `settle()` on its smoother while silent to apply edits immediately.
+
+`master_volume()` and `master_muted()` report your requested settings, rather than how far playback has progressed through a fade. Each getter reads one value, so separate calls do not give you a grouped snapshot.
+
 ## Validation
 
 The constructor accepts between 1 and 256 tracks. That count stays fixed for the lifetime of the object.
 
-`set()` accepts finite values from `0` through `1`, inclusive. Values outside that range, NaN, and infinity are rejected with `std::invalid_argument`. The previous value stays unchanged.
+`set()` and `set_master_volume()` accept finite values from `0` through `1`, inclusive. Values outside that range, NaN, and infinity are rejected with `std::invalid_argument`. The previous value stays unchanged.
 
 `set_all()` requires exactly one value per track. It validates the entire batch before publishing, so an invalid value or count throws `std::invalid_argument` without changing any levels.
 
@@ -135,14 +164,16 @@ Mute flags are read within the same revision check as the volumes. Playback acce
 
 Solo flags are checked within the same revision as mute and volume. If any track is soloed, unselected tracks target zero. An exclusive solo switch clears the old selection and enables the new one in a single publication, so playback never adopts half of that change.
 
-Keep all `set()`, `set_all()`, `set_muted()`, `set_solo()`, and `set_soli()` calls on one control thread. This publication scheme supports one writer while playback reads concurrently.
+Master volume and mute are checked within that same revision, so playback adopts the track and master targets from one consistent read. Each setter is a separate update; calling several setters does not group them into one transaction.
+
+Keep all track and master setters on one control thread. This publication scheme supports one writer while playback reads concurrently.
 
 `friend class VolumeSmoother` lets the smoother read the stored targets directly. Other callers use the public methods.
 
 ## Example
 
 ```cpp
-playset::TrackVolumes volumes(3);
+playset::MixerControls volumes(3);
 
 const std::array<double, 3> levels{0.5, 0, 1};
 volumes.set_all(levels);

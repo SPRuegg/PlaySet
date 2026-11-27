@@ -1,6 +1,6 @@
 # Transport
 
-`Transport` controls when a song plays and where playback begins. It keeps all stems on the same timeline while preserving track volumes through pauses, stops, seeks, and replays.
+`Transport` controls when a song plays and where playback begins. It keeps all stems on the same timeline while preserving track and master settings through pauses, stops, seeks, and replays.
 
 ## Definition
 
@@ -26,6 +26,8 @@ public:
   void set_tracks_muted(std::span<const TrackId> ids, bool muted);
   void set_track_solo(TrackId id, bool enabled);
   void set_tracks_soli(std::span<const TrackId> ids, bool enabled);
+  void set_master_volume(double volume);
+  void set_master_muted(bool muted);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
   [[nodiscard]] TransportSnapshot snapshot();
   // Private song, buffering, output, and state fields omitted here.
@@ -48,8 +50,10 @@ Implemented in `src/playback/transport/transport.cpp`.
 | `set_tracks_muted(ids, muted)` | Mutes or unmutes your selected tracks as one coherent update. |
 | `set_track_solo(id, enabled)` | Enables an exclusive solo, or disables solo for that track. |
 | `set_tracks_soli(ids, enabled)` | Adds or removes selected tracks without clearing other solos. |
-| `tracks()` | Returns track IDs, names, and requested volumes. |
-| `snapshot()` | Returns the current status, position, and duration. |
+| `set_master_volume(volume)` | Sets the combined output's requested volume from `0` through `1`. |
+| `set_master_muted(muted)` | Mutes or unmutes the whole mix without changing its stored volume. |
+| `tracks()` | Returns track IDs, names, requested volumes, and mute and solo settings. |
+| `snapshot()` | Returns the current status, position, duration, and requested master settings. |
 
 ### Creating a transport
 
@@ -90,6 +94,29 @@ Call `set_track_solo(id, true)` to hear just one track, replacing any previous s
 Muted tracks stay silent even when soloed. Solo changes preserve requested volumes and mute flags, use the selected smoothing mode while playing, and settle before resuming from pause. Both solo APIs keep their selections through Stop, Seek, and replay. `tracks()` reports each track's requested `solo` state.
 
 `tracks()` returns copies of the current track information. `snapshot()` also checks for background failures and recognizes when the output has finished playing the song's final audio. It can therefore update the status to `ended`.
+
+### Master volume and mute
+
+Each newly created transport starts with master volume `1` and master mute off. Call `set_master_volume(0.5)` to halve the combined signal's amplitude, or pass `0` for silence. The master affects every track, including soloed tracks, and is applied before final output clipping.
+
+Call `set_master_muted(true)` to silence the whole mix. This keeps your requested master volume and individual track settings. You can change the master volume while muted; passing `false` to unmute uses that latest value.
+
+For example:
+
+```cpp
+transport.pause();
+transport.set_master_muted(true);
+transport.set_master_volume(0.25);
+transport.play();
+```
+
+Here, playback resumes silently. If you pause, unmute, and play again, the first audio uses master volume `0.25` immediately. If you unmute while playing instead, the output gradually approaches that level using the selected smoothing mode.
+
+Master settings stay with this transport through Pause, Stop, Seek, and replay. They do not reset the song position, reopen the stems, recreate the output, or alter any track's volume, mute, or solo setting. A separate transport starts with its own defaults.
+
+Read `snapshot().master_volume` and `snapshot().master_muted` to see your requested settings. They describe your controls, rather than the current signal level or progress through a fade.
+
+Master volume must be finite and between `0` and `1`, inclusive. Other values throw `std::invalid_argument` without changing the settings or playback position.
 
 ## Thread ownership and errors
 

@@ -19,7 +19,7 @@ void ramps_and_mixing() {
   block.frames = playback_block_frames;
   std::fill(block.track(0).begin(), block.track(0).end(), 0.25F);
   std::fill(block.track(1).begin(), block.track(1).end(), 0.5F);
-  TrackVolumes volumes(2);
+  MixerControls volumes(2);
   require(volumes.get(0) == 1 && volumes.get(1) == 1, "Tracks must default to original level");
   volumes.set(0, 0);
   volumes.set(1, 0.5);
@@ -145,7 +145,7 @@ void transport_volumes(VolumeSmoothing mode) {
           tracks[0].volume == 0 && tracks[1].volume == 1, "Track identities or levels changed");
 }
 void mute_controls(VolumeSmoothing mode) {
-  TrackVolumes volumes(2);
+  MixerControls volumes(2);
   require(!volumes.is_muted(0) && !volumes.is_muted(1), "Tracks must load unmuted");
   volumes.set(0, 0.5);
   VolumeSmoother smoother(volumes, 48000, mode);
@@ -186,7 +186,7 @@ void mute_controls(VolumeSmoothing mode) {
 }
 
 void batch_mutes() {
-  TrackVolumes volumes(3);
+  MixerControls volumes(3);
   const std::array<TrackId, 2> selected{0, 2};
   volumes.set_muted(selected, true);
   require(volumes.is_muted(0) && !volumes.is_muted(1) && volumes.is_muted(2),
@@ -201,7 +201,7 @@ void batch_mutes() {
   volumes.set_muted(duplicates, false);
   require(!volumes.is_muted(0) && !volumes.is_muted(2), "Batch unmute failed");
 
-  TrackVolumes grouped(maximum_tracks);
+  MixerControls grouped(maximum_tracks);
   std::array<TrackId, maximum_tracks> ids{};
   for (TrackId id = 0; id < ids.size(); ++id) ids[id] = id;
   VolumeSmoother smoother(grouped, 48000);
@@ -265,7 +265,7 @@ void transport_mutes(VolumeSmoothing mode) {
 }
 
 void solo_controls(VolumeSmoothing mode) {
-  TrackVolumes volumes(3);
+  MixerControls volumes(3);
   VolumeSmoother smoother(volumes, 48000, mode);
   require(!volumes.is_solo(0), "Tracks must start without solo");
   smoother.begin_render();
@@ -372,7 +372,7 @@ void transport_solos(VolumeSmoothing mode) {
 }
 
 void coherent_solos() {
-  TrackVolumes volumes(2);
+  MixerControls volumes(2);
   volumes.set_solo(0, true);
   VolumeSmoother smoother(volumes, 48000);
   smoother.settle();
@@ -389,9 +389,102 @@ void coherent_solos() {
   writer.join();
 }
 
+void transport_master(VolumeSmoothing mode) {
+  TempFolder folder;
+  write_pcm_wav(folder.path / "A.wav", 48000, 1, 16, 48000);
+  write_pcm_wav(folder.path / "B.wav", 48000, 1, 16, 48000);
+  OfflineOutput *device = nullptr;
+  std::size_t outputs_created = 0;
+  auto factory = [&](BufferedPlayback &playback, double) {
+    ++outputs_created;
+    auto output = std::make_unique<OfflineOutput>(playback);
+    device = output.get();
+    return output;
+  };
+  Transport transport(prepare_stems(folder.path), factory, mode);
+  const auto initial = transport.snapshot();
+  require(initial.master_volume == 1 && !initial.master_muted, "Wrong transport master defaults");
+  transport.set_master_volume(0.5);
+  transport.play();
+  require(device->advance(512).front() == 0.25F, "First audio used stale master settings");
+  transport.set_master_volume(0.25);
+  const auto live = device->advance(512);
+  const auto expected = mode == VolumeSmoothing::linear ? 0.125 :
+      0.125 + 0.125 * std::exp(-512.0 / (48000 * 0.005));
+  require(live.front() < 0.25F && live.front() > 0.125F &&
+              std::abs(live.back() - expected) < 0.000001,
+          "Live master volume did not use the selected smoothing");
+  transport.set_master_muted(true);
+  const auto muted = device->advance(512);
+  require(muted.front() > 0 && muted.back() < muted.front(), "Live master mute jumped to silence");
+  const auto requested = transport.snapshot();
+  require(requested.master_muted && requested.master_volume == 0.25,
+          "Snapshot lost requested master settings during a fade");
+
+  transport.pause();
+  const auto paused = transport.snapshot().position_seconds;
+  transport.set_master_volume(0.75);
+  transport.set_track_volume(0, 0.5);
+  transport.set_track_muted(1, true);
+  transport.set_track_solo(0, true);
+  for (const auto invalid : {-0.1, 1.1, std::numeric_limits<double>::quiet_NaN(),
+                             std::numeric_limits<double>::infinity()}) {
+    bool rejected = false;
+    try { transport.set_master_volume(invalid); }
+    catch (const std::invalid_argument &) { rejected = true; }
+    const auto state = transport.snapshot();
+    require(rejected && state.master_volume == 0.75 && state.master_muted &&
+                state.position_seconds == paused && state.status == TransportStatus::paused,
+            "Rejected master volume changed transport state");
+  }
+  transport.play();
+  require(device->advance(512).front() == 0, "Paused master mute leaked on resume");
+  transport.pause();
+  transport.set_master_muted(false);
+  transport.play();
+  require(device->advance(512).front() == 0.09375F,
+          "Paused unmute did not restore edited master and track settings");
+  transport.seek(0.1);
+  require(device->advance(512).front() == 0.09375F, "Playing seek lost master volume");
+  transport.pause();
+  transport.set_master_muted(true);
+  transport.seek(0.2);
+  require(transport.snapshot().status == TransportStatus::paused &&
+              transport.snapshot().master_muted, "Paused seek lost master mute");
+  transport.stop();
+  const auto stopped = transport.snapshot();
+  require(stopped.status == TransportStatus::stopped && stopped.position_seconds == 0 &&
+              stopped.master_volume == 0.75 && stopped.master_muted,
+          "Stop lost master settings");
+  transport.seek(0.1);
+  require(transport.snapshot().status == TransportStatus::stopped &&
+              transport.snapshot().master_muted, "Stopped seek lost master mute");
+  transport.play();
+  require(device->advance(512).front() == 0, "Restart lost master mute");
+  transport.seek(transport.snapshot().duration_seconds);
+  require(transport.snapshot().status == TransportStatus::ended, "End was not recognized");
+  transport.play();
+  require(device->advance(512).front() == 0, "Replay lost master mute");
+  transport.pause();
+  transport.set_master_muted(false);
+  transport.play();
+  require(device->advance(512).front() == 0.09375F, "Replay lost the stored master volume");
+  const auto tracks = transport.tracks();
+  require(tracks[0].volume == 0.5 && tracks[0].solo && !tracks[0].muted &&
+              tracks[1].volume == 1 && !tracks[1].solo && tracks[1].muted,
+          "Master or transport changes altered track settings");
+  require(initial.master_volume == 1 && !initial.master_muted,
+          "An earlier snapshot changed after master edits");
+  require(outputs_created == 1, "Master edits or transport operations recreated the output");
+
+  Transport fresh(prepare_stems(folder.path), factory, mode);
+  require(fresh.snapshot().master_volume == 1 && !fresh.snapshot().master_muted,
+          "A new transport inherited another song's master settings");
+}
+
 void exponential_smoothing() {
   for (const auto rate : {44100.0, 48000.0, 192000.0}) {
-    TrackVolumes volumes(1);
+    MixerControls volumes(1);
     VolumeSmoother smoother(volumes, rate);
     smoother.begin_render();
     require(smoother.next_frame()[0] == 1, "Initial volume must not fade in");
@@ -428,7 +521,7 @@ void exponential_smoothing() {
   }
 }
 void concurrent_targets() {
-  TrackVolumes volumes(maximum_tracks);
+  MixerControls volumes(maximum_tracks);
   VolumeSmoother ramp(volumes, 192000);
   std::jthread writer([&] {
     for (std::size_t i = 0; i < 20000; ++i) {
@@ -444,7 +537,7 @@ void concurrent_targets() {
   }
 }
 void coherent_batches() {
-  TrackVolumes volumes(maximum_tracks);
+  MixerControls volumes(maximum_tracks);
   VolumeSmoother smoother(volumes, 48000);
   std::array<double, maximum_tracks> batch{};
   batch.fill(0.25);
@@ -496,6 +589,7 @@ int main() {
     batch_mutes();
     coherent_solos();
     for (auto mode : {VolumeSmoothing::exponential, VolumeSmoothing::linear}) {
+      transport_master(mode);
       solo_controls(mode);
       transport_solos(mode);
       mute_controls(mode);

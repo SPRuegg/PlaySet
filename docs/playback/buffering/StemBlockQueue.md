@@ -54,7 +54,7 @@ When `producer_finished` is `true`, the queue can render fewer frames and pad th
 
 One callback can use part of a block or read across several blocks. Because the queue remembers where the previous read stopped, any unused audio stays ready for the next callback. An empty output buffer consumes nothing and returns zero counts.
 
-If you supply a `VolumeSmoother`, the queue uses it to adjust the track volumes while mixing. It must cover the same number of tracks, and you must call its `begin_render()` first. Both channels use the same adjustment for each frame. Without a smoother, tracks play at their original levels.
+If you supply a `VolumeSmoother`, the queue uses it to adjust the track volumes and master output while mixing. It must cover the same number of tracks, and you must call its `begin_render()` first. Both channels use the same adjustment for each frame. Without a smoother, tracks and master output stay at their original levels.
 
 ### Capacity
 

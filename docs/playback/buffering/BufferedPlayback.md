@@ -10,7 +10,7 @@ Public declarations from `src/playback/buffering/buffered_playback.hpp`:
 class BufferedPlayback {
 public:
   explicit BufferedPlayback(PreparedSong song, std::int64_t start_frame = 0,
-                            std::shared_ptr<TrackVolumes> volumes = nullptr,
+                            std::shared_ptr<MixerControls> volumes = nullptr,
                             VolumeSmoothing smoothing = VolumeSmoothing::exponential);
   ~BufferedPlayback();
   void wait_until_ready();
@@ -52,7 +52,7 @@ Because `PreparedSong` owns readers that cannot be copied, you move it into `Buf
 
 `start_frame` tells each stem where to begin reading. Its default, `0`, starts at the beginning. Negative positions are rejected. If the position is past a stem's end, that reader moves to its end instead.
 
-Because optional `TrackVolumes` are held through a `std::shared_ptr`, the controls stay alive while playback uses them. Their track count must match the song; a mismatch throws `std::invalid_argument`.
+Because optional `MixerControls` are held through a `std::shared_ptr`, the controls stay alive while playback uses them. Their track count must match the song; a mismatch throws `std::invalid_argument`.
 
 Without volume controls, each track uses its original level. With controls, the default smoothing mode is exponential; callers can choose linear at construction.
 

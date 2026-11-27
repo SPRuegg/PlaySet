@@ -5,7 +5,7 @@ endif()
 add_library(playset_playback STATIC
   loading/stem_loader.cpp
   loading/macos/stem_reader.cpp
-  mixing/track_volume.cpp
+  mixing/mixer_controls.cpp
   buffering/stem_block.cpp
   buffering/stem_block_queue.cpp
   transport/transport.cpp

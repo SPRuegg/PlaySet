@@ -20,7 +20,7 @@ struct PlaybackReport {
 class BufferedPlayback {
 public:
   explicit BufferedPlayback(PreparedSong song, std::int64_t start_frame = 0,
-                            std::shared_ptr<TrackVolumes> volumes = nullptr,
+                            std::shared_ptr<MixerControls> volumes = nullptr,
                             VolumeSmoothing smoothing = VolumeSmoothing::exponential);
   ~BufferedPlayback();
   // Control thread only, before the output consumer starts.
@@ -49,7 +49,7 @@ private:
   void produce(std::stop_token stop) noexcept;
   PreparedSong song_;
   std::array<std::unique_ptr<Bank>, 2> banks_;
-  std::shared_ptr<TrackVolumes> volumes_;
+  std::shared_ptr<MixerControls> volumes_;
   std::unique_ptr<VolumeSmoother> volume_smoother_;
   std::exception_ptr error_;
   bool stalled_ = false;

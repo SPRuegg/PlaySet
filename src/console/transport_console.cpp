@@ -21,6 +21,10 @@ TrackId parse_track_id(std::string_view text) {
     throw std::invalid_argument("Track ID must be a nonnegative integer from tracks.");
   return id;
 }
+bool parse_enabled(std::string_view text) {
+  if (text != "on" && text != "off") throw std::invalid_argument("Choose on or off.");
+  return text == "on";
+}
 } // namespace
 
 void run_transport_console(Transport &transport, std::istream &commands,
@@ -30,7 +34,9 @@ void run_transport_console(Transport &transport, std::istream &commands,
       "  mute <track-id> <on|off>\n"
       "  mutes <track-id>... <on|off>\n"
       "  solo <track-id> <on|off> (exclusive when enabled)\n"
-    "  soli <track-id>... <on|off> (additive)\n";
+      "  soli <track-id>... <on|off> (additive)\n"
+      "  master-volume <0..1>\n"
+      "  master-mute <on|off>\n";
   output << help;
   for (std::string line; output << "> " && std::getline(commands, line);) {
     try {
@@ -49,9 +55,7 @@ void run_transport_console(Transport &transport, std::istream &commands,
         if (arguments.size() < 2 || arguments.size() > maximum_tracks + 1 ||
             (!batch && arguments.size() != 2))
           throw std::invalid_argument("Supply track IDs followed by on or off; mute and solo take one ID.");
-        const auto &flag = arguments.back();
-        if (flag != "on" && flag != "off") throw std::invalid_argument("Choose on or off.");
-        const bool enabled = flag == "on";
+        const bool enabled = parse_enabled(arguments.back());
         std::vector<TrackId> ids;
         ids.reserve(arguments.size() - 1);
         for (std::size_t i = 0; i + 1 < arguments.size(); ++i) {
@@ -62,6 +66,16 @@ void run_transport_console(Transport &transport, std::istream &commands,
         else if (action == "mutes") transport.set_tracks_muted(ids, enabled);
         else if (action == "solo") transport.set_track_solo(ids.front(), enabled);
         else transport.set_tracks_soli(ids, enabled);
+      } else if (action == "master-volume") {
+        double volume;
+        if (!(input >> volume) || input >> extra)
+          throw std::invalid_argument("Use master-volume <0..1>.");
+        transport.set_master_volume(volume);
+      } else if (action == "master-mute") {
+        std::string flag;
+        if (!(input >> flag) || input >> extra)
+          throw std::invalid_argument("Use master-mute <on|off>.");
+        transport.set_master_muted(parse_enabled(flag));
       } else if (action == "volume") {
         std::string id_text;
         double volume;
@@ -90,7 +104,9 @@ void run_transport_console(Transport &transport, std::istream &commands,
       const auto state = transport.snapshot();
       const char *names[] = {"stopped", "playing", "paused", "ended"};
       output << names[static_cast<unsigned>(state.status)] << ": "
-             << state.position_seconds << " / " << state.duration_seconds << " seconds\n";
+             << state.position_seconds << " / " << state.duration_seconds << " seconds; "
+             << "master-volume=" << state.master_volume
+             << " master-mute=" << (state.master_muted ? "on" : "off") << '\n';
     } catch (const std::exception &error) {
       errors << "PlaySet: " << error.what() << '\n';
     }
