@@ -7,6 +7,15 @@ add_test(
 set_tests_properties(playset.startup PROPERTIES TIMEOUT 10)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_executable(song_configuration_test song_configuration_test.cpp)
+target_link_libraries(song_configuration_test PRIVATE PlaySet::Songs nlohmann_json::nlohmann_json)
+set_target_properties(song_configuration_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(song_configuration_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS serialization validation identity)
+  add_test(NAME songs.configuration_${case} COMMAND song_configuration_test "${case}")
+  set_tests_properties(songs.configuration_${case} PROPERTIES TIMEOUT 10)
+endforeach()
+
 find_program(AFCONVERT_EXECUTABLE NAMES afconvert REQUIRED)
 set(M4A_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/tone.m4a")
 set(ALAC_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/tone-alac.m4a")
