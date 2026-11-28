@@ -159,6 +159,9 @@ set_tests_properties(console.fingerprints PROPERTIES TIMEOUT 30)
 add_test(NAME playback.console COMMAND "${Python3_EXECUTABLE}"
   "${CMAKE_CURRENT_SOURCE_DIR}/transport_console_test.py" "$<TARGET_FILE:transport_console_driver>")
 set_tests_properties(playback.console PROPERTIES TIMEOUT 30)
+add_test(NAME console.song_saving COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/song_save_console_test.py" "$<TARGET_FILE:transport_console_driver>")
+set_tests_properties(console.song_saving PROPERTIES TIMEOUT 30)
 
 add_executable(transport_console_test transport_console_test.cpp console_audio_output.cpp)
 target_link_libraries(transport_console_test PRIVATE PlaySet::Console)
