@@ -4,6 +4,8 @@
 
 You can turn a configuration into JSON with `serialize_song_configuration()`. This function does not read audio, write a file, or change playback.
 
+To write that configuration to disk, use [save_song_configuration()](SongFile.md).
+
 ## Using the module
 
 Link your target to `PlaySet::Songs` and include `songs/song_configuration.hpp`:

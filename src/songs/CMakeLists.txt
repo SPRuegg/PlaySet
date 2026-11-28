@@ -8,7 +8,7 @@ FetchContent_Declare(nlohmann_json
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_library(playset_songs STATIC song_configuration.cpp)
+add_library(playset_songs STATIC song_configuration.cpp song_file.cpp macos/atomic_song_file.cpp)
 add_library(PlaySet::Songs ALIAS playset_songs)
 target_link_libraries(playset_songs PUBLIC PlaySet::Audio PRIVATE nlohmann_json::nlohmann_json)
 target_compile_features(playset_songs PUBLIC cxx_std_20)
