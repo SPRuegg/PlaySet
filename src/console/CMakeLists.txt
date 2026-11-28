@@ -1,5 +1,5 @@
 add_library(playset_console STATIC transport_console.cpp fingerprint_console.cpp)
 add_library(PlaySet::Console ALIAS playset_console)
-target_link_libraries(playset_console PUBLIC PlaySet::Playback PRIVATE PlaySet::Audio)
+target_link_libraries(playset_console PUBLIC PlaySet::Playback PRIVATE PlaySet::Audio PlaySet::SongCapture)
 set_target_properties(playset_console PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(playset_console PRIVATE -Wall -Wextra -Wpedantic)

@@ -7,6 +7,33 @@ add_test(
 set_tests_properties(playset.startup PROPERTIES TIMEOUT 10)
 
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_executable(song_configuration_test song_configuration_test.cpp)
+target_link_libraries(song_configuration_test PRIVATE PlaySet::Songs nlohmann_json::nlohmann_json)
+set_target_properties(song_configuration_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(song_configuration_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS serialization validation identity)
+  add_test(NAME songs.configuration_${case} COMMAND song_configuration_test "${case}")
+  set_tests_properties(songs.configuration_${case} PROPERTIES TIMEOUT 10)
+endforeach()
+
+add_executable(song_capture_test song_capture_test.cpp)
+target_link_libraries(song_capture_test PRIVATE PlaySet::SongCapture PlaySet::Playback)
+set_target_properties(song_capture_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(song_capture_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS settings identity failures)
+  add_test(NAME songs.capture_${case} COMMAND song_capture_test "${case}")
+  set_tests_properties(songs.capture_${case} PROPERTIES TIMEOUT 15)
+endforeach()
+
+add_executable(song_file_test song_file_test.cpp)
+target_link_libraries(song_file_test PRIVATE PlaySet::Songs)
+set_target_properties(song_file_test PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(song_file_test PRIVATE -Wall -Wextra -Wpedantic)
+foreach(case IN ITEMS saving destinations failures)
+  add_test(NAME songs.file_${case} COMMAND song_file_test "${case}")
+  set_tests_properties(songs.file_${case} PROPERTIES TIMEOUT 15)
+endforeach()
+
 find_program(AFCONVERT_EXECUTABLE NAMES afconvert REQUIRED)
 set(M4A_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/tone.m4a")
 set(ALAC_FIXTURE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/tone-alac.m4a")
@@ -132,6 +159,9 @@ set_tests_properties(console.fingerprints PROPERTIES TIMEOUT 30)
 add_test(NAME playback.console COMMAND "${Python3_EXECUTABLE}"
   "${CMAKE_CURRENT_SOURCE_DIR}/transport_console_test.py" "$<TARGET_FILE:transport_console_driver>")
 set_tests_properties(playback.console PROPERTIES TIMEOUT 30)
+add_test(NAME console.song_saving COMMAND "${Python3_EXECUTABLE}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/song_save_console_test.py" "$<TARGET_FILE:transport_console_driver>")
+set_tests_properties(console.song_saving PROPERTIES TIMEOUT 30)
 
 add_executable(transport_console_test transport_console_test.cpp console_audio_output.cpp)
 target_link_libraries(transport_console_test PRIVATE PlaySet::Console)

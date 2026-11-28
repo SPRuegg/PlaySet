@@ -1,15 +1,22 @@
 #include "transport_console.hpp"
 
 #include "playback/transport/transport.hpp"
+#include "songs/song_configuration_capture.hpp"
+#include "songs/song_file.hpp"
 
 #include <charconv>
 #include <exception>
+#include <filesystem>
+#include <iomanip>
 #include <istream>
+#include <memory>
+#include <optional>
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace playset {
@@ -36,7 +43,11 @@ void run_transport_console(Transport &transport, std::istream &commands,
       "  solo <track-id> <on|off> (exclusive when enabled)\n"
       "  soli <track-id>... <on|off> (additive)\n"
       "  master-volume <0..1>\n"
-      "  master-mute <on|off>\n";
+      "  master-mute <on|off>\n"
+      "  save-as <path> (quote paths containing spaces; include .plsong)\n"
+      "  save (update the last successful destination)\n";
+  std::unique_ptr<SongConfigurationCapture> capture;
+  std::optional<std::filesystem::path> destination;
   output << help;
   for (std::string line; output << "> " && std::getline(commands, line);) {
     try {
@@ -47,6 +58,27 @@ void run_transport_console(Transport &transport, std::istream &commands,
       if (action == "quit") {
         if (input >> extra) throw std::invalid_argument("Unexpected argument.");
         break;
+      }
+      if (action == "save" || action == "save-as") {
+        std::filesystem::path candidate;
+        if (action == "save-as") {
+          std::string path;
+          if (!(input >> std::quoted(path)) || path.empty() || input >> extra)
+            throw std::invalid_argument("Use save-as <path>; quote paths containing spaces.");
+          candidate = std::filesystem::absolute(path);
+        } else {
+          if (input >> extra) throw std::invalid_argument("Use save without arguments.");
+          if (!destination) throw std::invalid_argument("Choose a destination with save-as first.");
+          candidate = *destination;
+        }
+        if (!capture)
+          capture = std::make_unique<SongConfigurationCapture>(
+              transport, transport.stems().front().path.parent_path());
+        const auto song = capture->capture();
+        save_song_configuration(candidate, song);
+        destination = std::move(candidate);
+        output << "Saved " << std::quoted(destination->string()) << '\n';
+        continue;
       }
       if (action == "mute" || action == "mutes" || action == "solo" || action == "soli") {
         std::vector<std::string> arguments;

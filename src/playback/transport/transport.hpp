@@ -48,6 +48,7 @@ public:
   void set_master_volume(double volume);
   void set_master_muted(bool muted);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
+  [[nodiscard]] std::span<const StemInfo> stems() const noexcept;
   [[nodiscard]] TransportSnapshot snapshot();
 
 private:

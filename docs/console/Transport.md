@@ -33,6 +33,8 @@ Enter `help` whenever you want to see the available commands. Enter one command 
 | `stop` | Silence playback and return to the beginning. |
 | `seek <seconds>` | Move to a position without changing whether playback should be audible. |
 | `status` | See the current status, position, duration, and requested master settings. |
+| `save-as <path>` | Save the current song configuration and use that destination for later saves. |
+| `save` | Update the last successfully chosen destination. |
 | `help` | Show the command list again. |
 | `quit` | Leave the console and release the loaded song and output. |
 
@@ -122,7 +124,11 @@ Enter `master-mute off` to unmute using `0.25`. These commands leave individual 
 
 Live master changes are smoothed. If you change the settings while paused, playback uses them immediately when you resume. Pause, Stop, Seek, and replay keep your master settings.
 
-The status line shows your requested settings, rather than the current signal level or progress through a fade. It appears after each successful command except `help` and `quit`.
+The status line shows your requested settings, rather than the current signal level or progress through a fade. It appears after each successful command except `help`, `quit`, `save`, and `save-as`. Save commands print the destination they wrote instead.
+
+### Saving your settings
+
+Use `save-as "Example Song.plsong"` for the first save, then `save` to update it after editing your settings. Paths containing spaces need double quotes. See [Song saving](SongSaving.md) for examples, source checks, and what happens after a failed save.
 
 ## Invalid input
 
@@ -135,6 +141,8 @@ Track and master volumes must be finite and between `0` and `1`, and seek positi
 ## Testing
 
 The console tests send commands through standard input and check the displayed track settings, transport state, and errors. Direct module tests also check that errors use their own output stream, commands continue after a rejected request, and quitting leaves later input unread. Both use silent output, so you can run them without opening an audio device.
+
+`test/song_save_console_test.py` also checks saved JSON, repeated saves and IDs, quoted paths, failed destination changes, and source mismatches. Its playback-state checks use the same silent output.
 
 ## Calling the console from code
 
@@ -153,8 +161,8 @@ playset::run_transport_console(transport, std::cin, std::cout, std::cerr);
 
 You can supply string streams instead when you want to send a prepared sequence of commands and inspect the replies in a test. The console uses the streams you pass; it does not read from or write to the terminal directly.
 
-The function prints help, reads one command at a time, and returns when you enter `quit` or reach the end of the input. A rejected command writes an error and lets you continue. Other commands report the current transport status, except `help`, which prints the command list.
+The function prints help, reads one command at a time, and returns when you enter `quit` or reach the end of the input. A rejected command writes an error and lets you continue. `help` prints the command list, save commands print the written destination, and other successful commands report the current transport status.
 
 Your transport stays owned by the caller. Returning from the console does not reset its settings or stop playback. Keep both the transport and streams alive throughout the call, and run it on the transport's control thread.
 
-`main.cpp` handles startup arguments, loads the stems, and creates the transport before calling the console. The console handles command parsing and display; the playback modules handle audio, validation of track settings, and smoothing. The `PlaySet::Console` build target depends on `PlaySet::Playback`, so playback can also be used without the console.
+`main.cpp` handles startup arguments, loads the stems, and creates the transport before calling the console. The console handles command parsing and display; the playback modules handle audio, validation of track settings, and smoothing. Saving calls the songs module's capture and file APIs through `PlaySet::SongCapture`. The console keeps its capture object and destination for one invocation, then releases them when it returns. Playback and the song file API can also be used without the console.
