@@ -90,6 +90,8 @@ std::vector<TrackSnapshot> Transport::tracks() const {
   return result;
 }
 
+std::span<const StemInfo> Transport::stems() const noexcept { return stems_; }
+
 void Transport::set_track_solo(TrackId id, bool enabled) {
   volumes_->set_solo(id, enabled);
 }

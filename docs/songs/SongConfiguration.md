@@ -14,7 +14,7 @@ const std::string text = playset::serialize_song_configuration(configuration);
 
 You supply a complete `SongConfiguration`. The function validates its fields and returns JSON with two-space indentation and a final newline. Calling it again with the same configuration returns the same text. If validation fails, it throws `std::invalid_argument` instead of returning part of a document.
 
-The module uses the audio module's fingerprint types. It does not depend on playback or the console. Its JSON library stays behind this interface, so your calling code works with ordinary C++ structs and strings.
+The `PlaySet::Songs` target uses the audio module's fingerprint types. It does not depend on playback or the console. Its JSON library stays behind this interface, so your calling code works with ordinary C++ structs and strings. To build a configuration from a loaded transport, use the separate [SongConfigurationCapture](SongConfigurationCapture.md) adapter.
 
 ## What you store
 

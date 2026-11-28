@@ -14,3 +14,9 @@ target_link_libraries(playset_songs PUBLIC PlaySet::Audio PRIVATE nlohmann_json:
 target_compile_features(playset_songs PUBLIC cxx_std_20)
 set_target_properties(playset_songs PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(playset_songs PRIVATE -Wall -Wextra -Wpedantic)
+
+add_library(playset_song_capture STATIC song_configuration_capture.cpp macos/song_id.cpp)
+add_library(PlaySet::SongCapture ALIAS playset_song_capture)
+target_link_libraries(playset_song_capture PUBLIC PlaySet::Songs PRIVATE PlaySet::Playback)
+set_target_properties(playset_song_capture PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(playset_song_capture PRIVATE -Wall -Wextra -Wpedantic)

@@ -29,6 +29,7 @@ public:
   void set_master_volume(double volume);
   void set_master_muted(bool muted);
   [[nodiscard]] std::vector<TrackSnapshot> tracks() const;
+  [[nodiscard]] std::span<const StemInfo> stems() const noexcept;
   [[nodiscard]] TransportSnapshot snapshot();
   // Private song, buffering, output, and state fields omitted here.
 };
@@ -53,6 +54,7 @@ Implemented in `src/playback/transport/transport.cpp`.
 | `set_master_volume(volume)` | Sets the combined output's requested volume from `0` through `1`. |
 | `set_master_muted(muted)` | Mutes or unmutes the whole mix without changing its stored volume. |
 | `tracks()` | Returns track IDs, names, requested volumes, and mute and solo settings. |
+| `stems()` | Gives you read-only source information in loaded track order. |
 | `snapshot()` | Returns the current status, position, duration, and requested master settings. |
 
 ### Creating a transport
@@ -94,6 +96,8 @@ Call `set_track_solo(id, true)` to hear just one track, replacing any previous s
 Muted tracks stay silent even when soloed. Solo changes preserve requested volumes and mute flags, use the selected smoothing mode while playing, and settle before resuming from pause. Both solo APIs keep their selections through Stop, Seek, and replay. `tracks()` reports each track's requested `solo` state.
 
 `tracks()` returns copies of the current track information. `snapshot()` also checks for background failures and recognizes when the output has finished playing the song's final audio. It can therefore update the status to `ended`.
+
+Use `stems()` when you need the source paths and audio attributes behind those tracks. Its entries follow track ID order, so entry `0` belongs to track `0`. You receive a read-only view of the stored [StemInfo](../../audio/loading/StemInfo.md) values, without reopening files or moving a reader. Keep the transport alive while using that view. The information describes the sources when loaded; it does not recheck files on disk.
 
 ### Master volume and mute
 
